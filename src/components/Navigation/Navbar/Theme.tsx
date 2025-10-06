@@ -1,4 +1,4 @@
-import React from 'react'
+
 import { useEffect, useState } from "react";
 import { cn } from '../../../lib/utils';
 import { Moon, Sun } from "lucide-react";
@@ -34,8 +34,8 @@ const Theme = () => {
     <button
       onClick={changeTheme}
       className={cn(
-        "fixed top-5 right-5 z-50 p-2 rounded-full transition-colors duration-300",
-        "focus:outlin-hidden"
+        "z-50 p-2 rounded-full transition-colors duration-300",
+        "focus:outline-hidden"
       )}
     >
       {isDarkMode ? (

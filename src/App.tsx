@@ -1,25 +1,18 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import Home from "./pages/Home";
-import Theme from "./components/Navigation/Navbar/Theme";
+import { Route, Routes } from "react-router-dom";
 import Navbar from "./components/Navigation/Navbar";
-import Detection from "./pages/Detection";
-import Generate from "./pages/Generate";
-import About from "./pages/About";
+import { NavRoutes } from "./constants";
 
 
 const App = () => {
   return (
     <main>
-      <Theme/>
       <Navbar/>
 
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/Detection" element={<Detection />} />
-        <Route path="/Generate" element={<Generate />} />
-        <Route path="/About" element={<About />} />
-
-      </Routes>
+        {NavRoutes.map((route) => (
+          <Route key={route.path} path={route.path} element={route.element} />
+        ))}
+    </Routes>
     </main>
   )
 }
