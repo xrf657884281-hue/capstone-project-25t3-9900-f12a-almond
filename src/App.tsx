@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useNavigate} from "react-router-dom";
 import {
   Navbar,
   NavBody,
@@ -14,14 +14,24 @@ import {
 import { NavRoutes, navItems } from "./constants";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import SignIn from "./pages/Sign-in";
+import SignUp from "./pages/Sign-up";
+import Dashboard from "./pages/Dashboard";
 
 const App = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const navigate = useNavigate();
 
   const navItemsForNavbar = navItems.map((item) => ({
     name: item.label,
     link: item.path,
   }));
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    navigate("/");
+  };
 
   return (
     <main>
@@ -31,14 +41,28 @@ const App = () => {
         <NavBody>
           <NavbarLogo />
           <NavItems items={navItemsForNavbar} />
+
           <div className="flex items-center gap-4 relative z-50">
-            <Link to="/sign-in">
-              <NavbarButton variant="secondary">Sign in </NavbarButton>
-            </Link>
-            <Link to="/sign-up">
-              <NavbarButton variant="primary">Sign up</NavbarButton>
-            </Link>
-          <ThemeToggle />
+            {isLoggedIn ? (
+              <>
+                <Link to="/profile">
+                  <NavbarButton variant="secondary">Profile</NavbarButton>
+                </Link>
+                <NavbarButton  variant="secondary"  className="bg-red-600 text-white hover:bg-red-700"  onClick={handleLogout}>  
+                  Logout
+                </NavbarButton>
+              </>
+            ) : (
+              <>
+                <Link to="/sign-in">
+                  <NavbarButton variant="secondary">Sign in</NavbarButton>
+                </Link>
+                <Link to="/sign-up">
+                  <NavbarButton variant="primary">Sign up</NavbarButton>
+                </Link>
+              </>
+            )}
+            <ThemeToggle />
           </div>
         </NavBody>
 
@@ -67,16 +91,33 @@ const App = () => {
               </Link>
             ))}
             <div className="flex w-full flex-col gap-4 mt-4">
-              <Link to="/sign-in" onClick={() => setIsMobileMenuOpen(false)}>
-                <NavbarButton variant="secondary" className="w-full">
-                  Log in
-                </NavbarButton>
-              </Link>
-              <Link to="/sign-up" onClick={() => setIsMobileMenuOpen(false)}>
-                <NavbarButton variant="primary" className="w-full">
-                  Sign in
-              </NavbarButton>
-              </Link>
+              {isLoggedIn ? (
+                <>
+                  <Link to="/profile" onClick={() => setIsMobileMenuOpen(false)}>
+                    <NavbarButton variant="secondary" className="w-full">
+                      Profile
+                    </NavbarButton>
+                  </Link>
+                  <NavbarButton
+                    variant="secondary"  className="w-full bg-red-600 text-white hover:bg-red-700"  onClick={handleLogout}
+                  >
+                    Logout
+                  </NavbarButton>
+                </>
+              ) : (
+                <>
+                  <Link to="/sign-in" onClick={() => setIsMobileMenuOpen(false)}>
+                    <NavbarButton variant="secondary" className="w-full">
+                      Sign in
+                    </NavbarButton>
+                  </Link>
+                  <Link to="/sign-up" onClick={() => setIsMobileMenuOpen(false)}>
+                    <NavbarButton variant="primary" className="w-full">
+                      Sign up
+                    </NavbarButton>
+                  </Link>
+                </>
+              )}
               <ThemeToggle />
             </div>
           </MobileNavMenu>
@@ -84,7 +125,15 @@ const App = () => {
       </Navbar>
       <br />
       <Routes>
-        {NavRoutes.map((route) => (
+        <Route
+          path="/sign-in"
+          element={<SignIn setIsLoggedIn={setIsLoggedIn} />}
+        />
+        <Route path="/sign-up" element={<SignUp />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        {NavRoutes.filter(
+          (r) => !["/sign-in", "/sign-up"].includes(r.path)
+        ).map((route) => (
           <Route key={route.path} path={route.path} element={route.element} />
         ))}
       </Routes>
