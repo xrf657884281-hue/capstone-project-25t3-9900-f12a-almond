@@ -2,8 +2,8 @@ import About from "../pages/About";
 import Detection from "../pages/Detection";
 import Generate from "../pages/Generate";
 import Home from "../pages/Home";
-import SignIn from "../pages/Sign-in";
-import SignUp from "../pages/Sign-up";
+import SignIn from "../pages/Sign-in"; 
+import SignUp from "../pages/Sign-up"; 
 
 export const NavRoutes = [
   { path: "/", element: <Home /> },
