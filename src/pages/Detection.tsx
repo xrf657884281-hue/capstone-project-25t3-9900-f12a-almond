@@ -4,6 +4,7 @@ const Detection = () => {
   return (
     <div>
         Detection
+        
       
     </div>
   )
