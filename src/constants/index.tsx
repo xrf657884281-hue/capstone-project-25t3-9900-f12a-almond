@@ -6,13 +6,13 @@ import Home from "../pages/Home";
 
 export const NavRoutes = [
   { path: "/", element: <Home /> },
-  { path: "/Detection", element: <Detection /> },
-  { path: "/Generate", element: <Generate /> },
-  { path: "/About", element: <About /> },
+  { path: "/detection", element: <Detection /> },
+  { path: "/generate", element: <Generate /> },
+  { path: "/about", element: <About /> },
 ];
 
 export const navItems = [
-  { path: "/Detection", label: "Detection" },
-  { path: "/Generate", label: "Generate" },
-  { path: "/About", label: "About Us" },
+  { path: "/detection", label: "Detection" },
+  { path: "/generate", label: "Generate" },
+  { path: "/about", label: "About Us" },
 ];
