@@ -8,7 +8,8 @@ const MAX_LEN = 10000;
 const Detection = () => {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>(""); 
+  const [fileName, setFileName] = useState<string>("");
+  const [url, setUrl] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const onTextChange = (v: string) => {
@@ -35,13 +36,31 @@ const Detection = () => {
     }
   };
 
+  const handleFetchFromUrl = async () => {
+    if (!url.trim()) {
+      setError("Please enter a valid URL first.");
+      return;
+    }
+    try {
+      setError(null);
+      const res = await fetch(url);
+      const html = await res.text();
+
+      const stripped = html.replace(/<[^>]*>?/gm, "").slice(0, MAX_LEN);
+      onTextChange(stripped);
+
+      console.log("Fetched content from URL:", url, stripped.slice(0, 100));
+    } catch (err) {
+      setError("Failed to fetch content from URL.");
+    }
+  };
+
   const handleScan = () => {
     if (!text.trim()) {
-      setError("Please paste or upload some text first.");
+      setError("Please paste, upload, or fetch some text first.");
       return;
     }
     setError(null);
-    // TODO: 接后端检测接口
     console.log(
       "Scanning text:",
       text.slice(0, 120) + (text.length > 120 ? "..." : "")
@@ -53,6 +72,7 @@ const Detection = () => {
     setText("");
     setError(null);
     setFileName("");
+    setUrl("");
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -71,18 +91,12 @@ const Detection = () => {
           AI Text Detection
         </h1>
         <p className="text-lg text-muted-foreground mb-4">
-          Paste or upload your text on the right, and we'll run <strong>AI-generated content detection</strong> on it and analyze
-          writing quality to help you determine if it was model-generated.
+          Paste, upload, or fetch text from a URL and we'll run <strong>AI-generated content detection</strong> on it.
         </p>
         <ul className="list-disc pl-5 text-muted-foreground space-y-2">
-          <li>
-            Support direct pasting of text or uploading <code>.txt</code> files.
-          </li>
+          <li>Support direct pasting of text, uploading <code>.txt</code> files, or fetching from URL.</li>
           <li>A maximum of {MAX_LEN.toLocaleString()} characters per entry.</li>
-          <li>
-            Results can be linked with the Generate page to form a “Generate →
-            Detect” workflow.
-          </li>
+          <li>Results can be linked with the Generate page to form a “Generate → Detect” workflow.</li>
         </ul>
       </motion.section>
 
@@ -96,11 +110,24 @@ const Detection = () => {
           <CardContent className="p-6 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
-                Paste your text or upload a .txt file
+                Please paste your text, upload a .txt file, or fetch from URL
               </div>
-              <div className="text-xs text-muted-foreground">
+              {/* <div className="text-xs text-muted-foreground">
                 {text.length}/{MAX_LEN}
-              </div>
+              </div> */}
+            </div>
+
+            <div className="flex gap-3">
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Enter a webpage URL..."
+                className="flex-1 rounded-md px-3 py-2 border border-input bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+              />
+              <Button variant="secondary" onClick={handleFetchFromUrl}>
+                Fetch
+              </Button>
             </div>
 
             <textarea
