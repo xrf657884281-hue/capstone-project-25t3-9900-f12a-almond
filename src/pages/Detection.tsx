@@ -71,8 +71,7 @@ const Detection = () => {
           AI Text Detection
         </h1>
         <p className="text-lg text-muted-foreground mb-4">
-          Paste or upload your text on the right, and we'll run
-          <strong>AI-generated content detection</strong> on it and analyze
+          Paste or upload your text on the right, and we'll run <strong>AI-generated content detection</strong> on it and analyze
           writing quality to help you determine if it was model-generated.
         </p>
         <ul className="list-disc pl-5 text-muted-foreground space-y-2">

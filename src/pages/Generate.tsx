@@ -28,7 +28,7 @@ const Generate = () => {
           AI Fake News Generator
         </h1>
         <p className="text-lg text-muted-foreground mb-4">
-          This project explores the potential of<strong>AI-powered fake news generation and detection.</strong>
+          This project explores the potential of <strong>AI-powered fake news generation and detection.</strong>
           We built a multi-agent generator that simulates news text and tests the robustness of detection models.
         </p>
         <p className="text-base text-muted-foreground">
