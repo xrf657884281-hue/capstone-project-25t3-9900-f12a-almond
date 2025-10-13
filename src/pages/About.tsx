@@ -26,8 +26,8 @@ const About = () => {
             efficiently generate synthetic fake news, test detection models, and advance 
             detection capabilities. 
             <br /><br />
-            <span className="font-semibold text-gray-900">
-            The problem is, the speed, scale, and sophistication of AI-generated 
+            <span className="font-semibold text-gray-900 dark:text-gray-100">
+            The problem is, the speed, scale, and sophistication of AI-generated
             misinformation can stretch research teams and their resources thin.</span></div>
           </div>
           <div className={style.photo_detail}>
@@ -46,7 +46,7 @@ const About = () => {
               We're a research team from UNSW Computer Science & Engineering, 
               passionate about understanding how AI creates and detects fake news. 
               <br /><br />
-              <span className="font-semibold text-gray-900">Think of us as the people asking: "If AI can lie, can it also catch 
+              <span className="font-semibold text-gray-900 dark:text-gray-100">Think of us as the people asking: "If AI can lie, can it also catch
               itself lying?"</span>
               <br /> <br />
               We bring together expertise in machine learning, NLP, 
@@ -64,9 +64,9 @@ const About = () => {
     {/* Principle 1 */}
     <div className="px-6">
       <h3 className="text-2xl font-bold mb-4">Research Integrity First</h3>
-      <p className="text-lg text-gray-700">
-        When research advances, we all win. We build transparent and reproducible 
-        platforms that stay focused on solving the most pressing challenges in 
+      <p className="text-lg text-gray-700 dark:text-gray-300">
+        When research advances, we all win. We build transparent and reproducible
+        platforms that stay focused on solving the most pressing challenges in
         misinformation detection. This isn't just talk — it's our research model.
       </p>
     </div>
@@ -74,10 +74,10 @@ const About = () => {
     {/* Principle 2 */}
     <div className="px-6">
       <h3 className="text-2xl font-bold mb-4">Drive Innovation</h3>
-      <p className="text-lg text-gray-700">
-        Use systematic experimentation to connect the dots between generation 
-        and detection. Take ownership of failure analysis, be accountable for 
-        improvements, and deliver actionable insights. Innovation speaks louder 
+      <p className="text-lg text-gray-700 dark:text-gray-300">
+        Use systematic experimentation to connect the dots between generation
+        and detection. Take ownership of failure analysis, be accountable for
+        improvements, and deliver actionable insights. Innovation speaks louder
         than assumptions.
       </p>
     </div>
@@ -85,10 +85,10 @@ const About = () => {
     {/* Principle 3 */}
     <div className="px-6">
       <h3 className="text-2xl font-bold mb-4">Collaborate Openly</h3>
-      <p className="text-lg text-gray-700">
-        We succeed together or not at all. By sharing datasets, methods, and 
-        findings across the research community, we keep collaboration authentic 
-        and progress transparent. Ask questions, share expertise, and join forces 
+      <p className="text-lg text-gray-700 dark:text-gray-300">
+        We succeed together or not at all. By sharing datasets, methods, and
+        findings across the research community, we keep collaboration authentic
+        and progress transparent. Ask questions, share expertise, and join forces
         to advance detection capabilities.
       </p>
     </div>
@@ -96,10 +96,10 @@ const About = () => {
     {/* Principle 4 */}
     <div className="px-6">
       <h3 className="text-2xl font-bold mb-4">Stay Ahead</h3>
-      <p className="text-lg text-gray-700">
-        Just as AI evolves to generate more sophisticated misinformation, 
-        improvement is central to who we are. Never stop learning from emerging 
-        threats and detection strategies. Question current methods. This instinct 
+      <p className="text-lg text-gray-700 dark:text-gray-300">
+        Just as AI evolves to generate more sophisticated misinformation,
+        improvement is central to who we are. Never stop learning from emerging
+        threats and detection strategies. Question current methods. This instinct
         to push forward ensures that we're ahead of the curve.
       </p>
     </div>
