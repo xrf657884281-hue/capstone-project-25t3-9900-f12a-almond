@@ -96,7 +96,7 @@ const About = () => {
     {/* Principle 4 */}
     <div className="px-6">
       <h3 className="text-2xl font-bold mb-4">Stay Ahead</h3>
-      <p className="text-lg text-gray-700">
+      <p className="text-lg text-gray-700 dark:text-gray-300">
         Just as AI evolves to generate more sophisticated misinformation, 
         improvement is central to who we are. Never stop learning from emerging 
         threats and detection strategies. Question current methods. This instinct 
