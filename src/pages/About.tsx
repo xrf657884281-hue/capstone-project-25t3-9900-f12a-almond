@@ -5,6 +5,7 @@ const style = {
   grid: 'grid md:grid-cols-2 gap-12 items-center',
   text_1: 'text-3xl font-semibold mb-4 text-center',
   main_text: 'text-lg mb-4 px-8',
+  photo_detail: 'w-full h-auto rounded-lg shadow-lg',
 }
 
 const About = () => {
@@ -29,23 +30,26 @@ const About = () => {
             The problem is, the speed, scale, and sophistication of AI-generated 
             misinformation can stretch research teams and their resources thin.</span></div>
           </div>
-          <div>
-            Photo
+          <div className={style.photo_detail}>
+            <img src="/public/About-us_1.jpg" alt="About_us_1" />
           </div>
         </div>
       </section>
       <section className={style.container}>
         <div className={style.grid}>
           <div>
-            Photo
+            <img src="/public/About_story-2.jpg" alt="About_us_2" />
           </div>
           <div>
             <p className={style.text_1}>Our Story</p>
-            <div>
+            <div className={style.main_text}>
               We're a research team from UNSW Computer Science & Engineering, 
               passionate about understanding how AI creates and detects fake news. 
-              Think of us as the people asking: "If AI can lie, can it also catch 
-              itself lying?" We bring together expertise in machine learning, NLP, 
+              <br /><br />
+              <span className="font-semibold text-gray-900">Think of us as the people asking: "If AI can lie, can it also catch 
+              itself lying?"</span>
+              <br /> <br />
+              We bring together expertise in machine learning, NLP, 
               and multimodal analysis to tackle one of the biggest challenges in 
               the AI era.
             </div>
