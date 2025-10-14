@@ -7,6 +7,7 @@ const Generate = () => {
   const [input, setInput] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>("");
+  const [generated, setGenerated] = useState<string>(""); 
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const handleGenerate = () => {
@@ -14,13 +15,21 @@ const Generate = () => {
     if (image) {
       console.log("Using image:", image.name);
     }
-    alert("Mock generate triggered. Hook up your API in handleGenerate().");
+
+    const fakeResult =
+      "\"" +
+      input.slice(0, 50) +
+      (input.length > 50 ? "..." : "") +
+      "\"";
+
+    setGenerated(fakeResult);
   };
 
   const handleClear = () => {
     setInput("");
     setImage(null);
     setFileName("");
+    setGenerated("");
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -31,6 +40,16 @@ const Generate = () => {
     setImage(file);
     setFileName(file.name);
     console.log("Selected file:", file);
+  };
+
+  const handleCopy = async () => {
+    if (!generated) return;
+    try {
+      await navigator.clipboard.writeText(generated);
+      alert("Copied to clipboard!");
+    } catch {
+      alert("Failed to copy");
+    }
   };
 
   return (
@@ -98,6 +117,20 @@ const Generate = () => {
                 </Button>
               </div>
             </div>
+
+            {generated && (
+              <div className="mt-6 p-4 border rounded-md bg-muted">
+                <h3 className="font-semibold mb-2">Generated News</h3>
+                <p className="text-sm text-foreground whitespace-pre-wrap">
+                  {generated}
+                </p>
+                <div className="flex justify-end mt-3">
+                  <Button variant="secondary" onClick={handleCopy}>
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            )}
 
           </CardContent>
         </Card>
