@@ -1,3 +1,4 @@
+import Guide from "@/components/Guide"
 import Hero from "@/components/Hero"
 import Product from "@/components/Product"
 
@@ -12,6 +13,7 @@ const Home = () => {
       
       <Hero/>
       <Product/>
+      <Guide/>
     </div>
   )
 }
