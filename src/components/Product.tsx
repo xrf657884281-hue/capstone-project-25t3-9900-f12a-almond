@@ -6,7 +6,7 @@ const Product = () => {
   return (
     <main className="grid gap-8 bg-brand-gradient background-dark_orangegradient background-light_orangegradient transition-all duration-300">
         <section className="px-6 py-10">
-            <h1 className="text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider my-30">Why chose us?</h1>
+            <h1 className="text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider my-30">Why choose us?</h1>
 
         </section>
 

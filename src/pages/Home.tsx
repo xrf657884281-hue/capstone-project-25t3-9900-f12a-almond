@@ -1,6 +1,7 @@
 import Guide from "@/components/Guide"
 import Hero from "@/components/Hero"
 import Product from "@/components/Product"
+import Touch from "@/components/Touch"
 
 const Home = () => {
   return (
@@ -14,6 +15,7 @@ const Home = () => {
       <Hero/>
       <Product/>
       <Guide/>
+      <Touch/>
     </div>
   )
 }

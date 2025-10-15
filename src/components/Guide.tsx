@@ -29,8 +29,8 @@ const Guide = () => {
 
                 <TabsContent value="generate" className="w-full">
                     <Card>
-                        <CardContent className="h-[800px] grid grid-cols-12">
-                            <ScrollArea className="col-start-8 col-end-12 justify-self-end h-[800px] w-[600px] rounded-md border p-4">
+                        <CardContent className="h-[600px] grid grid-cols-12">
+                            <ScrollArea className="col-start-8 col-end-12 justify-self-end h-[600px] w-[600px] rounded-md border p-4">
                                 Project ID: 34
                                 Project Title
                                 Can Ai See Through Its Own Lies? Generating And Detecting Ai-Driven Fake News
