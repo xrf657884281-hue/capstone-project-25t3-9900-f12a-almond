@@ -19,7 +19,7 @@ const Guide = () => {
         </section>
 
         <section className="gap-6 p-10">
-            <Tabs defaultValue="account" className="w-full">
+            <Tabs defaultValue="generate" className="w-full">
                 <TabsList>
                     <TabsTrigger value="generate">Generate</TabsTrigger>
                     <TabsTrigger value="detection">Detection</TabsTrigger>
@@ -30,7 +30,7 @@ const Guide = () => {
                 <TabsContent value="generate" className="w-full">
                     <Card>
                         <CardContent className="h-[600px] grid grid-cols-12">
-                            <ScrollArea className="col-start-8 col-end-12 justify-self-end h-[600px] w-[600px] rounded-md border p-4">
+                            <ScrollArea className="col-start-8 col-end-12 justify-self-end h-[600px] max-w-[600px] rounded-md border p-4">
                                 Project ID: 34
                                 Project Title
                                 Can Ai See Through Its Own Lies? Generating And Detecting Ai-Driven Fake News
@@ -123,7 +123,7 @@ const Guide = () => {
                 <TabsContent value="detection" className="w-full">
                     <Card>
                         <CardContent className="h-[800px] grid grid-cols-12">
-                            <ScrollArea className="col-start-2 col-end-7 justify-self-end h-[800px] w-[600px] rounded-md border p-4">
+                            <ScrollArea className="col-start-2 col-end-7 justify-self-end h-[800px] max-w-[600px]  rounded-md border p-4">
                                 Project ID: 34
                                 Project Title
                                 Can Ai See Through Its Own Lies? Generating And Detecting Ai-Driven Fake News
