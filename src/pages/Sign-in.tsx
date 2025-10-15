@@ -18,16 +18,28 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // Email+Password Login
+  //Email+Password Login
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
       console.log("login with email/password:", form);
-      // TODO: 这里对接你自己的后端登录
+
+      // save to localStorage
+      localStorage.setItem(
+        "user",
+        JSON.stringify({
+          uid: "local-" + Date.now(),
+          displayName: form.email.split("@")[0],
+          email: form.email,
+          photoURL: null,
+          provider: "password",
+        })
+      );
+
       setIsLoggedIn(true);
-      navigate("/dashboard");
+      navigate("/profile");
     } catch (err: any) {
       setError(err?.message || "Login failed.");
     } finally {
@@ -54,8 +66,9 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
           provider,
         })
       );
+
       setIsLoggedIn(true);
-      navigate("/dashboard");
+      navigate("/profile");
     } catch (err: any) {
       setError(err?.message || `Sign in with ${provider} failed.`);
     } finally {

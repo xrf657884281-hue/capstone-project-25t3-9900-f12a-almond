@@ -100,7 +100,7 @@ const Generate = () => {
               />
 
               <div className="flex items-center gap-3">
-                <Button variant="secondary" onClick={triggerFileDialog}>
+                <Button variant="outline" onClick={triggerFileDialog}>
                   Choose Image
                 </Button>
                 <span className="text-sm text-muted-foreground">
@@ -109,7 +109,7 @@ const Generate = () => {
               </div>
 
               <div className="flex gap-3">
-                <Button variant="secondary" onClick={handleClear}>
+                <Button variant="outline" onClick={handleClear}>
                   Clear
                 </Button>
                 <Button variant="default" onClick={handleGenerate}>
@@ -125,7 +125,7 @@ const Generate = () => {
                   {generated}
                 </p>
                 <div className="flex justify-end mt-3">
-                  <Button variant="secondary" onClick={handleCopy}>
+                  <Button variant="default" onClick={handleCopy}>
                     Copy
                   </Button>
                 </div>

@@ -2,10 +2,12 @@ import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useNavigate } from "react-router-dom"; 
 
 const MAX_LEN = 10000;
 
 const Detection = () => {
+  const navigate = useNavigate(); 
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
@@ -45,10 +47,8 @@ const Detection = () => {
       setError(null);
       const res = await fetch(url);
       const html = await res.text();
-
       const stripped = html.replace(/<[^>]*>?/gm, "").slice(0, MAX_LEN);
       onTextChange(stripped);
-
       console.log("Fetched content from URL:", url, stripped.slice(0, 100));
     } catch (err) {
       setError("Failed to fetch content from URL.");
@@ -61,11 +61,11 @@ const Detection = () => {
       return;
     }
     setError(null);
-    console.log(
-      "Scanning text:",
-      text.slice(0, 120) + (text.length > 120 ? "..." : "")
-    );
-    alert("Mock scan triggered. Hook up your API in handleScan().");
+
+    const ok = window.confirm("Scan finished. Do you want to view result?");
+    if (ok) {
+      navigate("/result", { state: { source: "detection", text } });
+    }
   };
 
   const handleClear = () => {
@@ -112,9 +112,6 @@ const Detection = () => {
               <div className="text-sm text-muted-foreground">
                 Please paste your text, upload a .txt file, or fetch from URL
               </div>
-              {/* <div className="text-xs text-muted-foreground">
-                {text.length}/{MAX_LEN}
-              </div> */}
             </div>
 
             <div className="flex gap-3">
@@ -125,7 +122,7 @@ const Detection = () => {
                 placeholder="Enter a webpage URL..."
                 className="flex-1 rounded-md px-3 py-2 border border-input bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
               />
-              <Button variant="secondary" onClick={handleFetchFromUrl}>
+              <Button variant="outline" onClick={handleFetchFromUrl}>
                 Fetch
               </Button>
             </div>
@@ -147,7 +144,7 @@ const Detection = () => {
               />
 
               <div className="flex items-center gap-3">
-                <Button variant="secondary" onClick={triggerFileDialog}>
+                <Button variant="outline" onClick={triggerFileDialog}>
                   Choose File
                 </Button>
                 <span className="text-sm text-muted-foreground">
@@ -156,7 +153,7 @@ const Detection = () => {
               </div>
 
               <div className="flex gap-3">
-                <Button variant="secondary" onClick={handleClear}>
+                <Button variant="outline" onClick={handleClear}>
                   Clear
                 </Button>
                 <Button variant="default" onClick={handleScan}>

@@ -16,7 +16,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import SignIn from "./pages/Sign-in";
 import SignUp from "./pages/Sign-up";
-import Dashboard from "./pages/Dashboard";
+import Profile from "./pages/Profile";
+import Result from "./pages/result";
 
 const App = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -130,7 +131,8 @@ const App = () => {
           element={<SignIn setIsLoggedIn={setIsLoggedIn} />}
         />
         <Route path="/sign-up" element={<SignUp />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/result" element={<Result />} />
         {NavRoutes.filter(
           (r) => !["/sign-in", "/sign-up"].includes(r.path)
         ).map((route) => (
