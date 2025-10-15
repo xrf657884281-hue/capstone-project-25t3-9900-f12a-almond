@@ -1,4 +1,5 @@
 import Hero from "@/components/Hero"
+import Product from "@/components/Product"
 
 const Home = () => {
   return (
@@ -9,8 +10,8 @@ const Home = () => {
 
       </div>
       
-
       <Hero/>
+      <Product/>
     </div>
   )
 }

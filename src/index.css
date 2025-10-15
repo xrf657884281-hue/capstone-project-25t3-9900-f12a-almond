@@ -132,3 +132,11 @@
     @apply bg-background text-foreground;
   }
 }
+
+@utility background-light_orangegradient {
+  @apply bg-gradient-to-r from-[#FFA733] to-[#FFD166];
+}
+
+@utility background-dark_orangegradient {
+  @apply dark:bg-gradient-to-r from-[#FF8A00] to-[#D97706];
+}
