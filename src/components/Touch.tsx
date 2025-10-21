@@ -9,9 +9,9 @@ import { Send } from "lucide-react"
 
 const Touch = () => {
   return (
-        <main className="grid gap-8 bg-brand-gradient background-dark_orangegradient background-light_orangegradient transition-all duration-300">
+        <main className="grid gap-8">
             <section className="px-6 py-10">
-                <h1 className="text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider my-30">Keep touch with us</h1>
+                <h1 className="dark:text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider my-30">Keep touch with us</h1>
 
             </section>
 
@@ -31,7 +31,7 @@ const Touch = () => {
             <section className="gap-6 p-10">
                 <Card className="w-full">
                     <CardContent className="grid grid-cols-1 sm:grid-cols-7 items-center p-8 h-[200px] ">
-                        <h1 className="sm:col-span-3 text-white text-3xl font-semibold text-black/90 sm:text-2xl md:text-3xl lg:text-4xl tracking-wider text-left">
+                        <h1 className="sm:col-span-3 dark:text-white text-3xl font-semibold text-black/90 sm:text-2xl md:text-3xl lg:text-4xl tracking-wider text-left">
                             What problem are you up against?
 
                         </h1>
