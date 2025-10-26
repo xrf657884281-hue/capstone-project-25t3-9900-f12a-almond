@@ -232,27 +232,69 @@ class TavilyVerifier:
         Enhanced quick fact check with targeted verification
         Compatible with Wikipedia verifier interface
         """
+        logger.info("🔍 DEBUG: quick_check method called!")
+        logger.info(f"🔍 DEBUG: self.client = {self.client}")
+        
         if not self.client:
+            logger.warning("⚠️ Tavily client not available, returning default score 0.5")
             return 0.5
         
         try:
             import re
             
+            logger.info(f"🔍 Tavily quick check starting, text length: {len(text)}, text preview: {text[:100]}")
+            
             # Extract key information
             dates = re.findall(r'\b(18|19|20)\d{2}\b', text)
+            logger.info(f"🔍 Tavily: Extracted dates: {dates}")
             
-            # Step 1: General topic search
-            search_result = self.search_tavily(text[:200], max_results=3)
+            # Step 1: General topic search - Increased from 3 to 5 for better coverage
+            search_result = self.search_tavily(text[:200], max_results=5)
+            logger.info(f"🔍 Tavily search completed, results: {len(search_result.get('results', []))}")
             
             if not search_result or not search_result.get('results'):
-                logger.info(f"🔍 Tavily: No search results found")
+                logger.info(f"🔍 Tavily: No search results found, returning 0.3")
                 return 0.3  # Low confidence if no results
             
             results = search_result.get('results', [])
             answer = search_result.get('answer', '').lower()
             
-            # Base score from search results
-            base_score = min(len(results) / 3.0 * 0.5, 0.5)
+            # NEW APPROACH: Extract and match entities/information
+            # Extract key entities from the text
+            extracted_info = set()
+            # Extract names (capitalized words, 2+ chars)
+            names = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', text[:200])
+            extracted_info.update(names[:15])  # Limit to first 15 names
+            # Extract locations (common patterns)
+            locations = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+(?:City|Country|State|Nation)\b', text[:200])
+            extracted_info.update(locations[:5])
+            # Extract organizations (common patterns)
+            organizations = re.findall(r'\b(?:The|A)\s+[A-Z][A-Za-z]+\s+(?:Company|Institute|University|Society|Organization)\b', text[:200])
+            extracted_info.update(organizations[:5])
+            
+            logger.info(f"📝 Extracted entities: {list(extracted_info)[:5]}")
+            
+            # Count how many of these appear in search results
+            matched_count = 0
+            all_result_text = ' '.join([r.get('content', '').lower() for r in results]) + ' ' + answer
+            
+            for info in extracted_info:
+                if info.lower() in all_result_text:
+                    matched_count += 1
+            
+            # Calculate ratio: matched entities / total extracted entities
+            total_extracted = len(extracted_info)
+            
+            # If no entities extracted, fall back to result-count-based scoring
+            if total_extracted == 0:
+                base_score = len(results) / 5.0  # Simple result-based score
+                logger.info(f"🔍 Tavily: No entities extracted, using result-based scoring: {base_score:.3f}")
+            else:
+                # Simple ratio: matched / total extracted
+                base_score = matched_count / total_extracted
+                logger.info(f"🔍 Tavily: Extracted {total_extracted} entities, matched {matched_count}")
+                logger.info(f"🔍 Tavily: Score = {matched_count}/{total_extracted} = {base_score:.3f}")
+            logger.info(f"📝 Tavily: Answer content: {answer[:200]}")
             
             # Step 2: If there are specific dates, do targeted fact checking
             if dates:
@@ -260,7 +302,7 @@ class TavilyVerifier:
                 
                 # Perform fact check query
                 fact_check_query = f"when was {text[:100]} fact check"
-                fact_result = self.search_tavily(fact_check_query, max_results=3)
+                fact_result = self.search_tavily(fact_check_query, max_results=5)
                 
                 if fact_result and fact_result.get('results'):
                     fact_answer = fact_result.get('answer', '').lower()
@@ -318,6 +360,8 @@ class TavilyVerifier:
             return final_score
             
         except Exception as e:
-            logger.error(f"Quick check failed: {e}")
+            import traceback
+            logger.error(f"❌ Tavily quick check failed: {e}")
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return 0.5
 

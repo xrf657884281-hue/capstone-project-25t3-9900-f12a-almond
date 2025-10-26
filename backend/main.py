@@ -147,6 +147,18 @@ async def startup_event():
     except Exception as e:
         logger.error(f"❌ Failed to initialize detection service: {e}")
     
+    # Initialize generation service
+    logger.info("Pre-initializing generation service...")
+    try:
+        from services.generation_service import GenerationService
+        generation_service = GenerationService()
+        if generation_service.client is not None:
+            logger.info(f"✅ Generation service initialized successfully")
+        else:
+            logger.warning("⚠️ Generation service initialized but client is None")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize generation service: {e}")
+    
     logger.info("System startup completed.")
 
 @app.get("/")

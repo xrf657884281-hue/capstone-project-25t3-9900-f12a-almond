@@ -4,6 +4,15 @@ Configuration file for MCP Fake News Detection System
 import os
 from typing import Optional
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("✅ Loaded .env file")
+except ImportError:
+    print("⚠️ python-dotenv not installed. Environment variables from .env will not be loaded.")
+    print("⚠️ Install with: pip install python-dotenv")
+
 class Config:
     """System configuration class"""
     
@@ -11,7 +20,7 @@ class Config:
     API_PROVIDER: str = os.getenv("API_PROVIDER", "openai")  # "openai" only
     
     # OpenAI API Keys
-    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY", "os.getenv("OPENAI_API_KEY")")
+    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     
     # Database Configuration
     MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")

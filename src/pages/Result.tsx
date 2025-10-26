@@ -246,12 +246,24 @@ const Result = () => {
                   
                   <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
                     <div className="bg-gray-50 rounded p-2">
-                      <div className="text-gray-500">Coverage</div>
-                      <div className="font-semibold">{(analysis.details.wikipedia_verification.wikipedia_coverage * 100).toFixed(0)}%</div>
+                      <div className="text-gray-500 mb-1">Coverage</div>
+                      <div className="font-semibold text-lg mb-1">{(analysis.details.wikipedia_verification.wikipedia_coverage * 100).toFixed(0)}%</div>
+                      <div className="text-gray-400 text-[10px]">
+                        {analysis.details.wikipedia_verification.wikipedia_coverage >= 0.8 
+                          ? '✅ High coverage' 
+                          : analysis.details.wikipedia_verification.wikipedia_coverage >= 0.5 
+                          ? '⚠️ Moderate coverage' 
+                          : '❌ Low coverage'}
+                      </div>
                     </div>
                     <div className="bg-gray-50 rounded p-2">
-                      <div className="text-gray-500">Entities Found</div>
-                      <div className="font-semibold">{analysis.details.wikipedia_verification.entities_found}/{analysis.details.wikipedia_verification.entities_checked}</div>
+                      <div className="text-gray-500 mb-1">Entities Found</div>
+                      <div className="font-semibold text-lg mb-1">{analysis.details.wikipedia_verification.entities_found}/{analysis.details.wikipedia_verification.entities_checked}</div>
+                      <div className="text-gray-400 text-[10px]">
+                        {analysis.details.wikipedia_verification.entities_checked > 0 
+                          ? `${((analysis.details.wikipedia_verification.entities_found / analysis.details.wikipedia_verification.entities_checked) * 100).toFixed(0)}% verified` 
+                          : 'No entities checked'}
+                      </div>
                     </div>
                   </div>
                 </div>
