@@ -12,9 +12,9 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 
 const Guide = () => {
   return (
-    <main className="grid gap-8 bg-brand-gradient transition-all duration-300">
+    <main className="grid gap-8 transition-all duration-300">
         <section className="px-6 py-10">
-            <h1 className="text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider my-30">How you can start?</h1>
+            <h1 className="dark:text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider my-30">How you can start?</h1>
 
         </section>
 
