@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { HighlightedText } from "@/components/HighlightedText";
 
 type Analysis = {
   isFake?: boolean;              
@@ -10,6 +11,10 @@ type Analysis = {
   readability?: number;       
   mostAISentences?: string[];  
   notes?: string;
+  confidence?: number;           // Backend confidence score
+  fake_probability?: number;     // Backend fake probability
+  explanation?: string;          // Backend explanation
+  details?: any;                 // Backend details object
 };
 
 const clamp01 = (v: number | undefined) => {
@@ -81,12 +86,26 @@ const Result = () => {
                   <Button variant="outline" onClick={handleBack}>Back</Button>
                 </div>
               </div>
+              
+              {/* 错误高亮提示 */}
+              {analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning && 
+               analysis.details.baseline_results.text_detection.detectgpt.reasoning.length > 0 && (
+                <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-xs text-yellow-800">
+                    Detected errors are highlighted in red, hover to view detailed error information
+                  </p>
+                </div>
+              )}
 
               {text ? (
                 <div className="rounded-md border p-4 bg-card text-card-foreground max-h-[60vh] overflow-auto">
-                  <pre className="whitespace-pre-wrap break-words text-sm">
-                    {text}
-                  </pre>
+                  <div className="text-sm">
+                    <HighlightedText 
+                      text={text}
+                      errors={analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning || []}
+                      className="text-sm"
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground">
@@ -147,34 +166,98 @@ const Result = () => {
 
           {/* Analysis */}
           <Card className="border border-border">
-            <CardContent className="p-4 space-y-3">
-              <h3 className="font-semibold text-sm">Analysis</h3>
+            <CardContent className="p-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-sm">🤖 Analysis</h3>
+                {analysis.details?.baseline_results?.text_detection?.detectgpt?.verdict && (
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                    {analysis.details.baseline_results.text_detection.detectgpt.verdict.toUpperCase()}
+                  </span>
+                )}
+              </div>
 
-              {Array.isArray(analysis.mostAISentences) && analysis.mostAISentences.length > 0 ? (
+              {/* GPT Analysis - DetectGPT Reasoning */}
+              {analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning && (
                 <div className="space-y-2">
+                  {analysis.details.baseline_results.text_detection.detectgpt.reasoning.map((reason: string, i: number) => (
+                    <div key={i} className="text-sm bg-blue-50 rounded-md border border-blue-200 p-3">
+                      <p className="text-gray-700">{reason}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Key Factors */}
+              {Array.isArray(analysis.mostAISentences) && analysis.mostAISentences.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Key Factors</h4>
                   {analysis.mostAISentences.map((s, i) => (
                     <div key={i} className="text-sm bg-muted/70 rounded-md border p-2">
                       {s}
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="text-sm text-muted-foreground">none.</div>
+              )}
+
+              {/* Notes */}
+              {analysis.notes && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Notes</h4>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{analysis.notes}</p>
+                </div>
+              )}
+
+              {/* Model Info */}
+              {analysis.details?.baseline_results?.text_detection?.detectgpt && (
+                <div className="pt-3 border-t border-gray-200">
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>Model: {analysis.details.baseline_results.text_detection.detectgpt.model}</span>
+                    <span>Confidence: {(analysis.details.baseline_results.text_detection.detectgpt.confidence * 100).toFixed(0)}%</span>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Notes */}
-          <Card className="border border-border">
-            <CardContent className="p-4">
-              <h3 className="font-semibold text-sm mb-2">Notes</h3>
-              {analysis.notes ? (
-                <p className="text-sm text-muted-foreground">{analysis.notes}</p>
-              ) : (
-                <p className="text-sm text-muted-foreground">No notes.</p>
-              )}
-            </CardContent>
-          </Card>
+          {/* Tavily Fact Verification */}
+          {analysis.details?.wikipedia_verification && (
+            <Card className="border border-border">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className="font-semibold text-sm">🔍 Fact Verification</h3>
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                    {analysis.details.wikipedia_verification.provider?.toUpperCase() || 'TAVILY'}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Verification Score</span>
+                    <span className={`font-semibold ${
+                      (analysis.details.wikipedia_verification.overall_score * 100) < 30 
+                        ? 'text-red-600' 
+                        : (analysis.details.wikipedia_verification.overall_score * 100) < 60 
+                        ? 'text-yellow-600' 
+                        : 'text-green-600'
+                    }`}>
+                      {(analysis.details.wikipedia_verification.overall_score * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <Progress value={analysis.details.wikipedia_verification.overall_score * 100} />
+                  
+                  <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+                    <div className="bg-gray-50 rounded p-2">
+                      <div className="text-gray-500">Coverage</div>
+                      <div className="font-semibold">{(analysis.details.wikipedia_verification.wikipedia_coverage * 100).toFixed(0)}%</div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-2">
+                      <div className="text-gray-500">Entities Found</div>
+                      <div className="font-semibold">{analysis.details.wikipedia_verification.entities_found}/{analysis.details.wikipedia_verification.entities_checked}</div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

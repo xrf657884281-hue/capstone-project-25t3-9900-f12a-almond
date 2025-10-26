@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useNavigate } from "react-router-dom"; 
+import { useNavigate } from "react-router-dom";
+import { apiService } from "@/services/api"; 
 
 const MAX_LEN = 10000;
 
@@ -12,6 +13,7 @@ const Detection = () => {
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [url, setUrl] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const onTextChange = (v: string) => {
@@ -55,16 +57,54 @@ const Detection = () => {
     }
   };
 
-  const handleScan = () => {
+  const handleScan = async () => {
     if (!text.trim()) {
       setError("Please paste, upload, or fetch some text first.");
       return;
     }
     setError(null);
+    setIsLoading(true);
 
-    const ok = window.confirm("Scan finished. Do you want to view result?");
-    if (ok) {
-      navigate("/result", { state: { source: "detection", text } });
+    try {
+      // Call the improved detection API
+      const result = await apiService.detectImproved({
+        text: text.trim(),
+        use_improved_detection: true
+      });
+
+      if (result.success) {
+        // Parse the backend response and create analysis object
+        const finalPrediction = result.result.final_prediction;
+        const predictionValue = typeof finalPrediction === 'string' ? finalPrediction : (finalPrediction as any).prediction;
+        
+        const analysis = {
+          isFake: predictionValue === 'fake',
+          verdict: predictionValue.toUpperCase(),
+          humanConfidence: (typeof finalPrediction === 'object' ? (finalPrediction as any).confidence : result.result.confidence) * 100,
+          readability: (typeof finalPrediction === 'object' ? (finalPrediction as any).fake_probability : result.result.fake_probability) * 100,
+          notes: result.result.explanation ? 
+            `Key factors: ${result.result.key_factors.join(', ')}` : 
+            'No analysis available',
+          mostAISentences: result.result.key_factors || [],
+          details: result.result  // Pass the entire result object for detailed display
+        };
+
+        navigate("/result", { 
+          state: { 
+            source: "detection", 
+            text: text.trim(),
+            analysis: analysis
+          } 
+        });
+      } else {
+        setError("Detection failed. Please try again.");
+      }
+    } catch (err) {
+      console.error("Detection error:", err);
+      console.error("Error details:", err);
+      setError(`Failed to connect to detection service: ${err instanceof Error ? err.message : String(err)}. Please try again.`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -153,11 +193,11 @@ const Detection = () => {
               </div>
 
               <div className="flex gap-3">
-                <Button variant="outline" onClick={handleClear}>
+                <Button variant="outline" onClick={handleClear} disabled={isLoading}>
                   Clear
                 </Button>
-                <Button variant="default" onClick={handleScan}>
-                  Scan
+                <Button variant="default" onClick={handleScan} disabled={isLoading}>
+                  {isLoading ? "Scanning..." : "Scan"}
                 </Button>
               </div>
             </div>

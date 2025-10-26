@@ -2,27 +2,43 @@ import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
+import { apiService } from "@/services/api";
 
 const Generate = () => {
   const [input, setInput] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [generated, setGenerated] = useState<string>(""); 
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleGenerate = () => {
-    console.log("Generating fake news with input:", input);
-    if (image) {
-      console.log("Using image:", image.name);
+  const handleGenerate = async () => {
+    if (!input.trim()) {
+      setError("Please enter a topic first.");
+      return;
     }
 
-    const fakeResult =
-      "\"" +
-      input.slice(0, 50) +
-      (input.length > 50 ? "..." : "") +
-      "\"";
+    console.log("Generating fake news with input:", input);
+    setError(null);
+    setIsLoading(true);
 
-    setGenerated(fakeResult);
+    try {
+      const response = await apiService.generateSingle({
+        topic: input.trim()
+      });
+
+      if (response.success && response.result.article) {
+        setGenerated(response.result.article);
+      } else {
+        setError("Generation failed. Please try again.");
+      }
+    } catch (err) {
+      console.error("Generation error:", err);
+      setError(`Failed to generate: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleClear = () => {
@@ -30,6 +46,7 @@ const Generate = () => {
     setImage(null);
     setFileName("");
     setGenerated("");
+    setError(null);
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -63,13 +80,14 @@ const Generate = () => {
       >
         <h1 className="text-4xl font-bold mb-6 leading-snug">
           AI Fake News Generator
+          <span className="text-lg font-normal ml-2 text-blue-600 dark:text-blue-400">Powered by Chat-GPT-4o</span>
         </h1>
         <p className="text-lg text-muted-foreground mb-4">
           This project explores the potential of <strong>AI-powered fake news generation and detection.</strong>
           We built a multi-agent generator that simulates news text and tests the robustness of detection models.
         </p>
         <p className="text-base text-muted-foreground">
-          Enter text or upload an image. The system will use your input to generate related fake news content, 
+          Enter text or upload an image. The system will use Chat-GPT-4o to generate related fake news content, 
           which can then be tested in the detection module.
         </p>
       </motion.div>
@@ -109,14 +127,20 @@ const Generate = () => {
               </div>
 
               <div className="flex gap-3">
-                <Button variant="outline" onClick={handleClear}>
+                <Button variant="outline" onClick={handleClear} disabled={isLoading}>
                   Clear
                 </Button>
-                <Button variant="default" onClick={handleGenerate}>
-                  Generate
+                <Button variant="default" onClick={handleGenerate} disabled={isLoading}>
+                  {isLoading ? "Generating..." : "Generate"}
                 </Button>
               </div>
             </div>
+
+            {error && (
+              <div className="mt-2 p-3 border border-red-500 rounded-md bg-red-50 text-red-700 text-sm">
+                {error}
+              </div>
+            )}
 
             {generated && (
               <div className="mt-6 p-4 border rounded-md bg-muted">
