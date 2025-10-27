@@ -1,3 +1,82 @@
+# Fake News Detection System
+
+A multimodal fake news detection and generation system built with React + TypeScript + FastAPI.
+
+## Features
+
+- 🎯 Advanced fake news detection using multiple AI models
+- 🤖 AI-powered fake news generation for testing
+- 🔍 Fact verification using Tavily API
+- 📊 Detailed analysis and visualization
+
+## Setup Instructions
+
+### Backend Setup
+
+1. Navigate to the backend directory:
+```bash
+cd backend
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Configure environment variables:
+```bash
+cp .env.example .env
+```
+
+4. Edit `.env` file and add your API keys:
+- `OPENAI_API_KEY`: Get from https://platform.openai.com/api-keys
+- `TAVILY_API_KEY`: Get from https://tavily.com/
+
+5. Start the backend server:
+```bash
+python main.py
+```
+
+The backend will run on http://localhost:8000
+
+### Frontend Setup
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Start the development server:
+```bash
+npm run dev
+```
+
+The frontend will run on http://localhost:5173
+
+## Environment Variables
+
+The project requires the following environment variables in `backend/.env`:
+
+```env
+# API Provider (openai or deepseek)
+API_PROVIDER=openai
+
+# OpenAI API Key (required)
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Tavily API Key (for fact verification)
+TAVILY_API_KEY=your_tavily_api_key_here
+USE_TAVILY=true
+
+# Logging
+LOG_LEVEL=INFO
+LOG_FILE=logs/fakenews.log
+```
+
+**Important**: Create a `.env` file in the `backend/` directory with your API keys. The `.env.example` file provides a template.
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
