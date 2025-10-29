@@ -1,3 +1,111 @@
+# 🚀 Fake News Detection System
+
+A comprehensive AI-powered fake news detection and generation system built with React, TypeScript, FastAPI, and multiple ML models.
+
+## ⚡ Quick Start
+
+### Prerequisites
+- Python 3.8+
+- Node.js 16+
+- Git
+
+### 🛠️ Setup Instructions
+
+#### 1. Clone Repository
+```bash
+git clone https://github.com/unsw-cse-comp99-3900/capstone-project-25t3-9900-f12a-almond.git
+cd capstone-project-25t3-9900-f12a-almond
+```
+
+#### 2. Backend Setup
+```bash
+cd backend
+
+# Copy environment file (contains shared API keys)
+cp .env.example .env
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start backend server
+python main.py
+```
+
+#### 3. Frontend Setup
+```bash
+# In a new terminal, from project root
+npm install
+npm run dev
+```
+
+#### 4. Access Application
+- **Frontend**: http://localhost:5173 (or 5174 if 5173 is busy)
+- **Backend API**: http://localhost:8000
+- **Health Check**: http://localhost:8000/health
+
+## 🔧 Troubleshooting
+
+### If Detection Results Differ Between Computers
+
+**Problem**: Different detection results on different machines.
+
+**Solution**: Ensure consistent environment setup:
+
+```bash
+# 1. Check code version
+git log --oneline -3
+
+# 2. Clean model cache
+rm -rf ~/.cache/huggingface/
+rm -rf __pycache__/
+
+# 3. Reinstall dependencies
+pip install -r requirements.txt --force-reinstall
+
+# 4. Restart services
+python main.py
+```
+
+### If Models Fail to Load
+
+**Problem**: RoBERTa or Zero-shot models fail to load.
+
+**Solution**: This is normal - the system gracefully degrades:
+- GPT-4 detection still works (primary model)
+- CLIP model provides additional features
+- System continues to function normally
+
+### If API Errors Occur
+
+**Problem**: 401 Unauthorized or API connection errors.
+
+**Solution**: 
+```bash
+# Check API key
+cat .env | grep OPENAI_API_KEY
+
+# Verify service status
+curl http://localhost:8000/health
+```
+
+## 📋 Features
+
+- **Multi-Model Detection**: GPT-4, RoBERTa, CLIP, Zero-shot classification
+- **Fact Verification**: Tavily API integration for real-time fact checking
+- **Error Highlighting**: Visual highlighting of detected errors in text
+- **Fake News Generation**: Controlled generation for research purposes
+- **Comprehensive Analysis**: Detailed reports with confidence scores
+
+## 🔑 API Keys
+
+The `.env.example` file contains shared team API keys for immediate use:
+- **OpenAI API**: For GPT-4 detection and generation
+- **Tavily API**: For fact verification
+
+**Note**: For production use, replace with your own API keys.
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
