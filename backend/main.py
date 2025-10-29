@@ -152,7 +152,7 @@ async def startup_event():
     try:
         from services.generation_service import GenerationService
         generation_service = GenerationService()
-        if generation_service.client is not None:
+        if generation_service.fake_news_generator.client is not None:
             logger.info(f"✅ Generation service initialized successfully")
         else:
             logger.warning("⚠️ Generation service initialized but client is None")
