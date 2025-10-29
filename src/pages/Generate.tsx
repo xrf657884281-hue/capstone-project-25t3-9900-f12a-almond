@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
@@ -11,7 +11,29 @@ const Generate = () => {
   const [generated, setGenerated] = useState<string>(""); 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tone, setTone] = useState("Normal"); 
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const savedNews = localStorage.getItem("generatedNews");
+    if (savedNews) setGenerated(savedNews);
+
+    const savedInput = localStorage.getItem("newsInput");
+    if (savedInput) setInput(savedInput);
+
+    const savedTone = localStorage.getItem("newsTone");
+    if (savedTone) setTone(savedTone);
+  }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    localStorage.setItem("newsInput", e.target.value);
+  };
+
+  const handleToneChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setTone(e.target.value);
+    localStorage.setItem("newsTone", e.target.value);
+  };
 
   const handleGenerate = async () => {
     if (!input.trim()) {
@@ -19,17 +41,22 @@ const Generate = () => {
       return;
     }
 
-    console.log("Generating fake news with input:", input);
     setError(null);
     setIsLoading(true);
 
     try {
+      const promptWithTone =
+        tone === "Normal"
+          ? input.trim()
+          : `Please write the article in a ${tone} style.\n\n${input.trim()}`;
+
       const response = await apiService.generateSingle({
-        topic: input.trim()
+        topic: promptWithTone,
       });
 
       if (response.success && response.result.article) {
         setGenerated(response.result.article);
+        localStorage.setItem("generatedNews", response.result.article);
       } else {
         setError("Generation failed. Please try again.");
       }
@@ -47,7 +74,11 @@ const Generate = () => {
     setFileName("");
     setGenerated("");
     setError(null);
+    setTone("Normal");
     if (inputRef.current) inputRef.current.value = "";
+    localStorage.removeItem("generatedNews");
+    localStorage.removeItem("newsInput");
+    localStorage.removeItem("newsTone");
   };
 
   const triggerFileDialog = () => inputRef.current?.click();
@@ -70,17 +101,19 @@ const Generate = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row items-start justify-center gap-8 px-6 py-12 bg-background text-foreground">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-8 px-6 py-12 bg-background text-foreground">
       
       <motion.div
-        initial={{ opacity: 0, x: -30 }}
-        animate={{ opacity: 1, x: 0 }}
+        initial={{ opacity: 0, y: -30 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex-1 max-w-xl"
+        className="flex-1 w-full max-w-2xl text-center"
       >
         <h1 className="text-4xl font-bold mb-6 leading-snug">
           AI Fake News Generator
-          <span className="text-lg font-normal ml-2 text-blue-600 dark:text-blue-400">Powered by Chat-GPT-4o</span>
+          <span className="text-lg font-normal ml-2 text-blue-600 dark:text-blue-400">
+            Powered by Chat-GPT-4o
+          </span>
         </h1>
         <p className="text-lg text-muted-foreground mb-4">
           This project explores the potential of <strong>AI-powered fake news generation and detection.</strong>
@@ -93,8 +126,8 @@ const Generate = () => {
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, x: 30 }}
-        animate={{ opacity: 1, x: 0 }}
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
         className="flex-1 w-full max-w-2xl"
       >
@@ -103,10 +136,24 @@ const Generate = () => {
             
             <textarea
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               placeholder="Paste your text or write a prompt..."
               className="w-full h-40 rounded-md p-4 border border-input bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none resize-none"
             />
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium">Choose Style:</label>
+              <select
+                value={tone}
+                onChange={handleToneChange}
+                className="w-full p-2 border rounded-md bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+              >
+                <option value="Formal">Formal — Use a professional, neutral, and authoritative tone.</option>
+                <option value="Sensational">Sensational — Use dramatic, emotional, and attention-grabbing language.</option>
+                <option value="Fun">Fun — Use playful, humorous, and light-hearted expressions.</option>
+                <option value="Normal">Normal — Use a natural, everyday news tone.</option>
+              </select>
+            </div>
 
             <div className="flex items-center justify-between gap-4">
               <input
