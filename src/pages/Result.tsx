@@ -179,31 +179,36 @@ const Result = () => {
               {/* GPT Analysis - DetectGPT Reasoning */}
               {analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning && (
                 <div className="space-y-2">
-                  {analysis.details.baseline_results.text_detection.detectgpt.reasoning.map((reason: string, i: number) => (
-                    <div key={i} className="text-sm bg-blue-50 rounded-md border border-blue-200 p-3">
-                      <p className="text-gray-700">{reason}</p>
-                    </div>
-                  ))}
+                  {analysis.details.baseline_results.text_detection.detectgpt.reasoning.map((reason: string, i: number) => {
+                    // Try to extract title and content
+                    const titleMatch = reason.match(/\*\*(.*?)\*\*/);
+                    if (titleMatch) {
+                      const title = titleMatch[1];
+                      const content = reason.replace(/\*\*(.*?)\*\*/, '').trim();
+                      return (
+                        <div key={i} className="text-sm bg-blue-50 rounded-md border border-blue-200 p-3">
+                          <p className="text-gray-700"><span className="font-bold text-gray-800">{title}:</span> {content}</p>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={i} className="text-sm bg-blue-50 rounded-md border border-blue-200 p-3">
+                        <p className="text-gray-700">{reason}</p>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
               {/* Key Factors */}
               {Array.isArray(analysis.mostAISentences) && analysis.mostAISentences.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Key Factors</h4>
+                  <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide">Key Factors</h4>
                   {analysis.mostAISentences.map((s, i) => (
                     <div key={i} className="text-sm bg-muted/70 rounded-md border p-2">
-                      {s}
+                      <strong>{s}</strong>
                     </div>
                   ))}
-                </div>
-              )}
-
-              {/* Notes */}
-              {analysis.notes && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-medium text-gray-600 uppercase tracking-wide">Notes</h4>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{analysis.notes}</p>
                 </div>
               )}
 
@@ -246,7 +251,7 @@ const Result = () => {
                   
                   <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
                     <div className="bg-gray-50 rounded p-2">
-                      <div className="text-gray-500 mb-1">Coverage</div>
+                      <div className="text-gray-500 mb-1 font-bold">Coverage</div>
                       <div className="font-semibold text-lg mb-1">{(analysis.details.wikipedia_verification.wikipedia_coverage * 100).toFixed(0)}%</div>
                       <div className="text-gray-400 text-[10px]">
                         {analysis.details.wikipedia_verification.wikipedia_coverage >= 0.8 
@@ -257,7 +262,7 @@ const Result = () => {
                       </div>
                     </div>
                     <div className="bg-gray-50 rounded p-2">
-                      <div className="text-gray-500 mb-1">Entities Found</div>
+                      <div className="text-gray-500 mb-1 font-bold">Entities Found</div>
                       <div className="font-semibold text-lg mb-1">{analysis.details.wikipedia_verification.entities_found}/{analysis.details.wikipedia_verification.entities_checked}</div>
                       <div className="text-gray-400 text-[10px]">
                         {analysis.details.wikipedia_verification.entities_checked > 0 

@@ -320,18 +320,18 @@ class DetectorFusion:
             # Feature importance weights (learned from training data if available)
             # For now, use empirical weights based on feature effectiveness
             feature_weights = np.array([
-                0.12,  # DetectGPT sensitivity (very important)
-                0.08,  # DetectGPT other feature
-                0.15,  # GPT-4 detection (most important)
-                0.05,  # Zero-shot result
-                0.10,  # RoBERTa score
-                0.08,  # Rhetorical features
-                0.08,  # Consistency features
-                0.12,  # Wikipedia/Tavily verification
-                0.05,  # Additional features
-                0.07,  # Cross-modal features
-                0.05,  # Sentiment features
-                0.05   # Other features
+                0.08,  # DetectGPT sensitivity
+                0.05,  # DetectGPT other feature
+                0.50,  # GPT-4 detection (most important - 50%)
+                0.02,  # Zero-shot result
+                0.05,  # RoBERTa score
+                0.05,  # Rhetorical features
+                0.05,  # Consistency features
+                0.10,  # Wikipedia/Tavily verification
+                0.02,  # Additional features
+                0.03,  # Cross-modal features
+                0.02,  # Sentiment features
+                0.03   # Other features
             ])
             
             # Normalize weights to sum to 1
@@ -598,7 +598,7 @@ class ImprovedDetection:
         if self.verifier and use_wikipedia:  # Check if verification is enabled
             try:
                 logger.info(f"🔍 [FAST PATH] Performing fact pre-verification using {self.verifier_type}...")
-                # 添加超时控制
+                # Timeout control
                 import signal
                 
                 def timeout_handler(signum, frame):
