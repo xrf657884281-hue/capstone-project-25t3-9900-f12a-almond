@@ -68,3 +68,4 @@ class Config:
     def get_default_model(cls) -> str:
         """Get default model"""
         return cls.DEFAULT_GPT_MODEL
+    

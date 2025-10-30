@@ -231,7 +231,7 @@ const Result = () => {
                 <div className="flex items-center gap-2 mb-3">
                   <h3 className="font-semibold text-sm">🔍 Fact Verification</h3>
                   <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
-                    {analysis.details.wikipedia_verification.provider?.toUpperCase() || 'TAVILY'}
+                    TAVILY
                   </span>
                 </div>
                 <div className="space-y-2">
