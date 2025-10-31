@@ -54,16 +54,23 @@ const Generate = () => {
     setIsLoading(true);
 
     try {
-      let prompt = input.trim();
-      if (tone !== "Normal") {
-        prompt = `Please write the article in a ${tone} style.\n\n${prompt}`;
-      }
+      const basePrompt = input.trim();
+
+      const parts: string[] = [];
       if (topic !== "General") {
-        prompt = `Please write a ${topic} news article.\n\n${prompt}`;
+        parts.push(`Write a ${topic} news article`);
+      } else {
+        parts.push(`Write a general news article`);
       }
 
+      if (tone !== "Normal") {
+        parts.push(`in a ${tone} tone`);
+      }
+
+      const finalPrompt = `${parts.join(" ")} about: ${basePrompt}`;
+
       const response = await apiService.generateSingle({
-        topic: prompt,
+        topic: finalPrompt,
       });
 
       if (response.success && response.result.article) {
@@ -252,7 +259,9 @@ const Generate = () => {
 
             {generated && (
               <div className="mt-6 p-4 border rounded-md bg-muted">
-                <h3 className="font-semibold mb-2">Generated News</h3>
+                <h3 className="font-semibold mb-2">
+                  Generated News ({topic} | {tone})
+                </h3>
                 <p className="text-sm text-foreground whitespace-pre-wrap">
                   {generated}
                 </p>
