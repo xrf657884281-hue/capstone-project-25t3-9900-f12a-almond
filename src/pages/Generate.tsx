@@ -8,10 +8,11 @@ const Generate = () => {
   const [input, setInput] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>("");
-  const [generated, setGenerated] = useState<string>(""); 
+  const [generated, setGenerated] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tone, setTone] = useState("Normal"); 
+  const [tone, setTone] = useState("Normal");
+  const [topic, setTopic] = useState("General");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -23,6 +24,9 @@ const Generate = () => {
 
     const savedTone = localStorage.getItem("newsTone");
     if (savedTone) setTone(savedTone);
+
+    const savedTopic = localStorage.getItem("newsTopic");
+    if (savedTopic) setTopic(savedTopic);
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -35,6 +39,11 @@ const Generate = () => {
     localStorage.setItem("newsTone", e.target.value);
   };
 
+  const handleTopicChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setTopic(e.target.value);
+    localStorage.setItem("newsTopic", e.target.value);
+  };
+
   const handleGenerate = async () => {
     if (!input.trim()) {
       setError("Please enter a topic first.");
@@ -45,13 +54,16 @@ const Generate = () => {
     setIsLoading(true);
 
     try {
-      const promptWithTone =
-        tone === "Normal"
-          ? input.trim()
-          : `Please write the article in a ${tone} style.\n\n${input.trim()}`;
+      let prompt = input.trim();
+      if (tone !== "Normal") {
+        prompt = `Please write the article in a ${tone} style.\n\n${prompt}`;
+      }
+      if (topic !== "General") {
+        prompt = `Please write a ${topic} news article.\n\n${prompt}`;
+      }
 
       const response = await apiService.generateSingle({
-        topic: promptWithTone,
+        topic: prompt,
       });
 
       if (response.success && response.result.article) {
@@ -62,7 +74,11 @@ const Generate = () => {
       }
     } catch (err) {
       console.error("Generation error:", err);
-      setError(`Failed to generate: ${err instanceof Error ? err.message : String(err)}`);
+      setError(
+        `Failed to generate: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
     } finally {
       setIsLoading(false);
     }
@@ -75,10 +91,12 @@ const Generate = () => {
     setGenerated("");
     setError(null);
     setTone("Normal");
+    setTopic("General");
     if (inputRef.current) inputRef.current.value = "";
     localStorage.removeItem("generatedNews");
     localStorage.removeItem("newsInput");
     localStorage.removeItem("newsTone");
+    localStorage.removeItem("newsTopic");
   };
 
   const triggerFileDialog = () => inputRef.current?.click();
@@ -102,7 +120,6 @@ const Generate = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-8 px-6 py-12 bg-background text-foreground">
-      
       <motion.div
         initial={{ opacity: 0, y: -30 }}
         animate={{ opacity: 1, y: 0 }}
@@ -116,12 +133,15 @@ const Generate = () => {
           </span>
         </h1>
         <p className="text-lg text-muted-foreground mb-4">
-          This project explores the potential of <strong>AI-powered fake news generation and detection.</strong>
-          We built a multi-agent generator that simulates news text and tests the robustness of detection models.
+          This project explores the potential of{" "}
+          <strong>AI-powered fake news generation and detection.</strong> We
+          built a multi-agent generator that simulates news text and tests the
+          robustness of detection models.
         </p>
         <p className="text-base text-muted-foreground">
-          Enter text or upload an image. The system will use Chat-GPT-4o to generate related fake news content, 
-          which can then be tested in the detection module.
+          Enter text or upload an image. The system will use Chat-GPT-4o to
+          generate related fake news content, which can then be tested in the
+          detection module.
         </p>
       </motion.div>
 
@@ -133,7 +153,6 @@ const Generate = () => {
       >
         <Card className="w-full shadow-lg border border-border">
           <CardContent className="p-6 flex flex-col gap-4">
-            
             <textarea
               value={input}
               onChange={handleInputChange}
@@ -148,10 +167,44 @@ const Generate = () => {
                 onChange={handleToneChange}
                 className="w-full p-2 border rounded-md bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
               >
-                <option value="Formal">Formal — Use a professional, neutral, and authoritative tone.</option>
-                <option value="Sensational">Sensational — Use dramatic, emotional, and attention-grabbing language.</option>
-                <option value="Fun">Fun — Use playful, humorous, and light-hearted expressions.</option>
-                <option value="Normal">Normal — Use a natural, everyday news tone.</option>
+                <option value="Formal">
+                  Formal — Use a professional, neutral, and authoritative tone.
+                </option>
+                <option value="Sensational">
+                  Sensational — Use dramatic, emotional, and attention-grabbing
+                  language.
+                </option>
+                <option value="Fun">
+                  Fun — Use playful, humorous, and light-hearted expressions.
+                </option>
+                <option value="Normal">
+                  Normal — Use a natural, everyday news tone.
+                </option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium">Choose Topic:</label>
+              <select
+                value={topic}
+                onChange={handleTopicChange}
+                className="w-full p-2 border rounded-md bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+              >
+                <option value="Politics">
+                  Politics — Cover government policies, elections, and
+                  international relations.
+                </option>
+                <option value="Business">
+                  Business — Focus on markets, companies, and economic trends.
+                </option>
+                <option value="Sports">
+                  Sports — Report on games, athletes, and sporting events.
+                </option>
+                <option value="Technology">
+                  Technology — Highlight innovations, digital trends, and new
+                  gadgets.
+                </option>
+                <option value="General">General — No specific topic focus.</option>
               </select>
             </div>
 
@@ -174,10 +227,18 @@ const Generate = () => {
               </div>
 
               <div className="flex gap-3">
-                <Button variant="outline" onClick={handleClear} disabled={isLoading}>
+                <Button
+                  variant="outline"
+                  onClick={handleClear}
+                  disabled={isLoading}
+                >
                   Clear
                 </Button>
-                <Button variant="default" onClick={handleGenerate} disabled={isLoading}>
+                <Button
+                  variant="default"
+                  onClick={handleGenerate}
+                  disabled={isLoading}
+                >
                   {isLoading ? "Generating..." : "Generate"}
                 </Button>
               </div>
@@ -202,7 +263,6 @@ const Generate = () => {
                 </div>
               </div>
             )}
-
           </CardContent>
         </Card>
       </motion.div>
