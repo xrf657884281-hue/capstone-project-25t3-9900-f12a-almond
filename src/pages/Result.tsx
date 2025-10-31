@@ -185,7 +185,9 @@ const Result = () => {
                     const titleMatch = reason.match(/\*\*(.*?)\*\*/);
                     if (titleMatch) {
                       const title = titleMatch[1];
-                      const content = reason.replace(/\*\*(.*?)\*\*/, '').trim();
+                      let content = reason.replace(/\*\*(.*?)\*\*/, '').trim();
+                      // Remove leading colon and spaces if content starts with colon
+                      content = content.replace(/^:\s*/, '');
                       return (
                         <div key={i} className="text-sm bg-blue-50 rounded-md border border-blue-200 p-3">
                           <p className="text-gray-700"><span className="font-bold text-gray-800">{title}:</span> {content}</p>
