@@ -88,7 +88,8 @@ const Result = () => {
               </div>
               
               {/* 错误高亮提示 */}
-              {analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning && 
+              {(analysis.readability ?? 0) > 0 && 
+               analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning && 
                analysis.details.baseline_results.text_detection.detectgpt.reasoning.length > 0 && (
                 <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
                   <p className="text-xs text-yellow-800">
@@ -102,7 +103,7 @@ const Result = () => {
                   <div className="text-sm">
                     <HighlightedText 
                       text={text}
-                      errors={analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning || []}
+                      errors={(analysis.readability ?? 0) > 0 ? (analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning || []) : []}
                       className="text-sm"
                     />
                   </div>
@@ -128,7 +129,7 @@ const Result = () => {
                   <span
                     className={
                       "px-2 py-1 rounded text-xs font-semibold border " +
-                      (verdict === "FAKE"
+                      (verdict === "FAKE" && (analysis.readability ?? 0) > 0
                         ? "bg-red-100 text-red-800 border-red-200"
                         : "bg-green-100 text-green-800 border-green-200")
                     }

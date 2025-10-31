@@ -16,11 +16,10 @@ from collections import Counter
 import spacy
 import logging
 # Fact verification now integrated into DetectionService
-# Import verifiers (Wikipedia and Tavily)
+# Import verifier (Tavily only)
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.wikipedia_verifier import WikipediaVerifier
 from utils.tavily_verifier import TavilyVerifier
 
 logger = logging.getLogger(__name__)
@@ -548,37 +547,20 @@ class ImprovedDetection:
         self.detector_fusion = DetectorFusion()
         self.cross_modal_checker = CrossModalChecker()
         
-        # Choose verifier: Tavily (recommended) or Wikipedia
-        self.verifier_type = 'tavily' if use_tavily else 'wikipedia'
+        # Use Tavily verifier only
+        self.verifier_type = 'tavily'
         self.verifier = None
         
-        if use_tavily:
-            # Try Tavily first (better real-time search)
-            try:
-                self.verifier = TavilyVerifier()
-                if self.verifier.client:
-                    logger.info("✅ Tavily verifier initialized successfully")
-                    self.verifier_type = 'tavily'
-                else:
-                    raise Exception("Tavily client not available")
-            except Exception as e:
-                logger.warning(f"⚠️ Tavily verifier failed, falling back to Wikipedia: {e}")
-                try:
-                    self.verifier = WikipediaVerifier()
-                    self.verifier_type = 'wikipedia'
-                    logger.info("✅ Wikipedia verifier initialized as fallback")
-                except Exception as e2:
-                    logger.warning(f"Failed to initialize Wikipedia verifier: {e2}")
-                    self.verifier = None
-        else:
-            # Use Wikipedia directly
-            try:
-                self.verifier = WikipediaVerifier()
-                self.verifier_type = 'wikipedia'
-                logger.info("✅ Wikipedia verifier initialized successfully")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Wikipedia verifier: {e}")
+        try:
+            self.verifier = TavilyVerifier()
+            if self.verifier.client:
+                logger.info("✅ Tavily verifier initialized successfully")
+            else:
+                logger.warning("⚠️ Tavily client not available")
                 self.verifier = None
+        except Exception as e:
+            logger.warning(f"⚠️ Tavily verifier failed: {e}")
+            self.verifier = None
     
     def improved_detection(self, baseline_results: Dict, text: str, image_metadata: Optional[Dict] = None, detection_config: Optional[Dict] = None) -> Dict:
         """Execute improved detection with fact verification and customizable configuration"""
@@ -607,23 +589,17 @@ class ImprovedDetection:
                 signal.signal(signal.SIGALRM, timeout_handler)
                 signal.alarm(10)  # 10秒超时
                 
-                # Use unified verification method
-                if self.verifier_type == 'tavily':
-                    # Tavily quick check
-                    quick_score = self.verifier.quick_check(text)
-                    wikipedia_verification = {
-                        'overall_score': quick_score,
-                        'wikipedia_coverage': 1.0 if quick_score > 0.5 else 0.5,
-                        'entities_found': 1,
-                        'entities_checked': 1,
-                        'claims_verified': 1 if quick_score > 0.7 else 0,
-                        'claims_checked': 1,
-                        'provider': 'tavily'
-                    }
-                else:
-                    # Wikipedia verification
-                    wikipedia_verification = self.verifier.verify_news_content(text)
-                    wikipedia_verification['provider'] = 'wikipedia'
+                # Use Tavily verification
+                quick_score = self.verifier.quick_check(text)
+                wikipedia_verification = {
+                    'overall_score': quick_score,
+                    'wikipedia_coverage': 1.0 if quick_score > 0.5 else 0.5,
+                    'entities_found': 1,
+                    'entities_checked': 1,
+                    'claims_verified': 1 if quick_score > 0.7 else 0,
+                    'claims_checked': 1,
+                    'provider': 'tavily'
+                }
                 
                 signal.alarm(0)  # 取消超时
                 
@@ -684,7 +660,7 @@ class ImprovedDetection:
                                 'final_score': fast_fake_prob,
                                 'confidence': 0.90,
                                 'key_factors': [f'high_{self.verifier_type}_verification', f'{self.verifier_type}_fast_path'],
-                                'fast_path_reason': f'Wikipedia verification very high (score: {wiki_score:.2%}, coverage: {wiki_coverage:.2%}, claims: {claims_verified}/{total_claims}, entities: {entities_found}/{total_entities})',
+                                'fast_path_reason': f'Tavily verification very high (score: {wiki_score:.2%}, coverage: {wiki_coverage:.2%}, claims: {claims_verified}/{total_claims}, entities: {entities_found}/{total_entities})',
                                 'wikipedia_details': {
                                     'verification_score': wiki_score,
                                     'coverage': wiki_coverage,
@@ -716,7 +692,7 @@ class ImprovedDetection:
                 logger.error(f"{self.verifier_type.title()} verification failed: {e}")
                 wikipedia_verification = {'error': str(e), 'overall_score': 0.0, 'provider': self.verifier_type}
         
-        # ========== NORMAL PATH: Full Analysis (if Wikipedia verification is low/inconclusive) ==========
+        # ========== NORMAL PATH: Full Analysis (if fact verification is low/inconclusive) ==========
         logger.info("🔄 [NORMAL PATH] Performing comprehensive detection analysis...")
         
         # 1. Rhetorical analysis (optional)
@@ -749,7 +725,7 @@ class ImprovedDetection:
             'consistency_check': consistency_check,
             'fusion_result': fusion_result,
             'fact_verification': fact_verification,  # Added
-            'wikipedia_verification': wikipedia_verification,  # NEW - Wikipedia fact checking
+            'wikipedia_verification': wikipedia_verification,  # Fact checking (Tavily)
             'fast_path': False,  # Flag to indicate normal path was used
             'final_prediction': self._generate_final_prediction(
                 fusion_result, 
@@ -790,7 +766,7 @@ class ImprovedDetection:
             'detailed_analysis': {}
         }
         
-        # Highlight Wikipedia verification issues
+        # Highlight fact verification issues
         if wikipedia_verification:
             wiki_issues = self._highlight_wikipedia_issues(text, wikipedia_verification)
             report['issues_found'].extend(wiki_issues['issues'])
@@ -834,9 +810,9 @@ class ImprovedDetection:
         # Check if text quality is too poor (likely parsing errors)
         text_quality_score = self._assess_text_quality(text)
         if text_quality_score < 0.3:  # Very poor quality, likely parsing errors
-            # Reduce Wikipedia-related issues for poor quality text
+            # Reduce verification-related issues for poor quality text
             all_issues = [issue for issue in all_issues if not issue.get('type', '').startswith('unverified_')]
-            report['text_quality_warning'] = 'Text appears to have parsing issues, Wikipedia verification reduced'
+            report['text_quality_warning'] = 'Text appears to have parsing issues, fact verification reduced'
         
         # Add model detection results if available
         if 'baseline_results' in detection_result:
@@ -912,7 +888,7 @@ class ImprovedDetection:
         
         problematic_sentences = []
         
-        # Process Wikipedia and rhetorical issues
+        # Process fact verification and rhetorical issues
         for issue in issues:
             issue_type = issue.get('type', '')
             description = issue.get('description', '')
@@ -1002,7 +978,7 @@ class ImprovedDetection:
     def _get_simple_reason(self, issue_type: str, description: str) -> str:
         """Get simple reason for the issue"""
         reasons = {
-            'unverified_entity': 'Entity not found in Wikipedia',
+            'unverified_entity': 'Entity not found in fact verification',
             'unverified_claim': 'Unverified claim',
             'low_verification_score': 'Low overall verification score',
             'emotional_language': 'Contains emotional language',
@@ -1034,7 +1010,7 @@ class ImprovedDetection:
         return severity_map.get(issue_type, 'Medium')
     
     def _highlight_wikipedia_issues(self, text: str, wikipedia_verification: Dict) -> Dict:
-        """Highlight Wikipedia verification issues in text"""
+        """Highlight fact verification issues in text"""
         issues = []
         highlighted_text = text
         
@@ -1052,7 +1028,7 @@ class ImprovedDetection:
                         'type': 'unverified_entity',
                         'text': entity,
                         'severity': 'high',
-                        'description': f'Entity "{entity}" not found in Wikipedia'
+                        'description': f'Entity "{entity}" not found in fact verification'
                     })
         
         # Check for unverified claims
@@ -1069,7 +1045,7 @@ class ImprovedDetection:
                         'type': 'unverified_claim',
                         'text': claim,
                         'severity': 'high',
-                        'description': f'Claim "{claim}" not verified by Wikipedia'
+                        'description': f'Claim "{claim}" not verified by fact verification'
                     })
         
         # Check for low verification scores
@@ -1079,7 +1055,7 @@ class ImprovedDetection:
                 'type': 'low_verification_score',
                 'text': f'Overall verification score: {overall_score:.1%}',
                 'severity': 'medium',
-                'description': 'Low Wikipedia verification score indicates potential factual issues'
+                'description': 'Low fact verification score indicates potential factual issues'
             })
         
         return {'highlighted_text': highlighted_text, 'issues': issues}
@@ -1222,7 +1198,7 @@ class ImprovedDetection:
             recommendations.append("📚 Cross-reference factual claims with reliable sources")
         
         if 'low_verification_score' in issue_types:
-            recommendations.append("📖 Check Wikipedia and other fact-checking sources")
+            recommendations.append("📖 Check fact-checking sources")
         
         if 'emotional_language' in issue_types:
             recommendations.append("😤 Be aware of emotional manipulation tactics")
@@ -1292,27 +1268,27 @@ class ImprovedDetection:
         if wiki_score < 0.5 or wiki_coverage < 0.6:  # More lenient threshold (changed from 0.6/0.7 to 0.5/0.6)
             base_contradiction_penalty = 0.15  # Reduced penalty for low verification (was 0.40)
             contradiction_penalty = base_contradiction_penalty * wikipedia_weight  # Apply user-defined weight
-            logger.warning(f"WIKIPEDIA LOW VERIFICATION: +{contradiction_penalty:.2f} penalty (score: {wiki_score:.3f}, coverage: {wiki_coverage:.3f})")
+            logger.warning(f"TAVILY LOW VERIFICATION: +{contradiction_penalty:.2f} penalty (score: {wiki_score:.3f}, coverage: {wiki_coverage:.3f})")
         
-        # NEW: Check for Wikipedia contradictions (high coverage but potentially wrong facts)
+        # NEW: Check for Tavily contradictions (high coverage but potentially wrong facts)
         if wiki_coverage >= 0.8 and wiki_score >= 0.7:  # High coverage and score
             # Check if this might be a subtle fake news with wrong facts
             claims_verified = wikipedia_verification.get('claims_verified', 0)
             total_claims = wikipedia_verification.get('total_claims', 1)
             claims_ratio = claims_verified / total_claims if total_claims > 0 else 0
             
-            # If high Wikipedia coverage but low claims verification, it might be contradictory
+            # If high Tavily coverage but low claims verification, it might be contradictory
             if claims_ratio < 0.7:  # Less than 70% of claims verified (more lenient, was 0.8)
                 contradiction_penalty += 0.15 * wikipedia_weight  # Reduced penalty (was 0.30)
-                logger.warning(f"WIKIPEDIA POTENTIAL CONTRADICTION: +{0.15 * wikipedia_weight:.2f} penalty (coverage: {wiki_coverage:.3f}, claims_ratio: {claims_ratio:.3f})")
+                logger.warning(f"TAVILY POTENTIAL CONTRADICTION: +{0.15 * wikipedia_weight:.2f} penalty (coverage: {wiki_coverage:.3f}, claims_ratio: {claims_ratio:.3f})")
             
             # SPECIAL: Year contradiction detection for historical claims
-            # If text contains years and Wikipedia coverage is high, check for year contradictions
+            # If text contains years and Tavily coverage is high, check for year contradictions
             import re
             years_in_text = re.findall(r'\b(18|19|20)\d{2}\b', text.lower())
             if years_in_text and claims_ratio < 0.9:  # More lenient (was 1.0)
                 contradiction_penalty += 0.15 * wikipedia_weight  # Reduced penalty (was 0.25)
-                logger.warning(f"WIKIPEDIA YEAR CONTRADICTION DETECTED: +{0.15 * wikipedia_weight:.2f} penalty (years: {years_in_text}, claims_ratio: {claims_ratio:.3f})")
+                logger.warning(f"TAVILY YEAR CONTRADICTION DETECTED: +{0.15 * wikipedia_weight:.2f} penalty (years: {years_in_text}, claims_ratio: {claims_ratio:.3f})")
         
         # NEW: If verification is high (≥50%), boost credibility (more lenient, was 0.6)
         verifier_display_name = wikipedia_verification.get('provider', self.verifier_type).title()
