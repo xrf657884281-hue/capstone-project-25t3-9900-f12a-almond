@@ -1,0 +1,3 @@
+后端部分mongo文件夹，docker_compose.mongo.yml文件,.env文件，放在后端根目录下， mongo_service.py放在后端service文件夹里面
+main.py, config.py替换原有的这两个文件，
+前端部分，sign-up, sign-in, api文件替换原来的
