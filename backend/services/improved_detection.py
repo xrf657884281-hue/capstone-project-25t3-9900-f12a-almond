@@ -580,17 +580,53 @@ class ImprovedDetection:
         if self.verifier and use_verification:  # Check if verification is enabled
             try:
                 logger.info(f"🔍 [FAST PATH] Performing fact pre-verification using {self.verifier_type}...")
-                # Timeout control
-                import signal
+                # Timeout control (cross-platform compatible)
+                import platform
+                import threading
                 
-                def timeout_handler(signum, frame):
-                    raise TimeoutError("Fact verification timeout")
+                quick_score = 0.5  # Default score
+                timeout_occurred = [False]
                 
-                signal.signal(signal.SIGALRM, timeout_handler)
-                signal.alarm(10)  # 10秒超时
+                if platform.system() == 'Windows':
+                    # Windows doesn't support signal.SIGALRM, use threading.Timer
+                    def call_with_timeout():
+                        nonlocal quick_score
+                        try:
+                            quick_score = self.verifier.quick_check(text)
+                        except Exception as e:
+                            logger.error(f"Tavily verification failed: {e}")
+                            quick_score = 0.5
+                        finally:
+                            timeout_occurred[0] = False
+                    
+                    thread = threading.Thread(target=call_with_timeout)
+                    thread.daemon = True
+                    thread.start()
+                    thread.join(timeout=10.0)  # 10 second timeout
+                    
+                    if thread.is_alive():
+                        logger.warning("⚠️ Tavily verification timeout (>10s)")
+                        timeout_occurred[0] = True
+                        quick_score = 0.5
+                else:
+                    # Unix systems (Linux, macOS) can use signal.SIGALRM
+                    import signal
+                    
+                    def timeout_handler(signum, frame):
+                        timeout_occurred[0] = True
+                        raise TimeoutError("Fact verification timeout")
+                    
+                    signal.signal(signal.SIGALRM, timeout_handler)
+                    signal.alarm(10)  # 10秒超时
+                    
+                    try:
+                        quick_score = self.verifier.quick_check(text)
+                    except TimeoutError:
+                        logger.warning("⚠️ Tavily verification timeout (>10s)")
+                        quick_score = 0.5
+                    finally:
+                        signal.alarm(0)  # 取消超时
                 
-                # Use Tavily verification
-                quick_score = self.verifier.quick_check(text)
                 tavily_verification = {
                     'overall_score': quick_score,
                     'tavily_coverage': 1.0 if quick_score > 0.5 else 0.5,
@@ -601,8 +637,6 @@ class ImprovedDetection:
                     'claims_checked': 1,
                     'provider': 'tavily'
                 }
-                
-                signal.alarm(0)  # 取消超时
                 
                 tavily_score = tavily_verification.get('overall_score', 0.0)
                 tavily_coverage = tavily_verification.get('tavily_coverage', 0.0)
