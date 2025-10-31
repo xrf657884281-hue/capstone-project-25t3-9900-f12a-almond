@@ -1275,13 +1275,17 @@ class ImprovedDetection:
         tavily_boost = 0.0  # Positive adjustment for high Tavily verification
         contradiction_penalty = 0.0  # Extra penalty for extremely low Tavily verification
         
+        # Initialize Tavily scores to default values
+        tavily_score = 0.0
+        tavily_coverage = 0.0
+        verifier_display_name = 'Tavily'
+        
+        # OPTION A: Tavily weight (REDUCED from 0.45/0.30 to 0.20/0.15) - Apply user weight multiplier
         if tavily_verification and 'overall_score' in tavily_verification:
             # Low Tavily coverage/verification increases fake news probability
             tavily_score = tavily_verification.get('overall_score', 0.0)
             tavily_coverage = tavily_verification.get('tavily_coverage', tavily_verification.get('wikipedia_coverage', 0.0))
-            
-        # OPTION A: Tavily weight (REDUCED from 0.45/0.30 to 0.20/0.15) - Apply user weight multiplier
-        if tavily_verification and 'overall_score' in tavily_verification:
+            verifier_display_name = tavily_verification.get('provider', self.verifier_type).title()
             base_tavily_adjustment = (1.0 - tavily_score) * 0.20 + (1.0 - tavily_coverage) * 0.15
             tavily_adjustment = base_tavily_adjustment * tavily_weight  # Apply user-defined weight
             
@@ -1312,8 +1316,6 @@ class ImprovedDetection:
                     logger.warning(f"TAVILY YEAR CONTRADICTION DETECTED: +{0.15 * tavily_weight:.2f} penalty (years: {years_in_text}, claims_ratio: {claims_ratio:.3f})")
             
             # NEW: If verification is high (≥50%), boost credibility (more lenient, was 0.6)
-            verifier_display_name = tavily_verification.get('provider', self.verifier_type).title()
-            
             if tavily_score >= 0.5:
                 # High verification significantly boosts credibility
                 tavily_boost = -0.30  # Increased boost (was -0.25)
