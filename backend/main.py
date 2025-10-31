@@ -2,23 +2,45 @@
 MCP Fake News Detection System - Main Backend API
 Modular fake news detection system based on multimodal machine learning
 """
-from fastapi import FastAPI, HTTPException, Depends
+# Ensure console uses UTF-8 to avoid Unicode errors on Windows
+import sys as _sys
+import os as _os_init
+try:
+    if hasattr(_sys.stdout, 'reconfigure'):
+        _sys.stdout.reconfigure(encoding='utf-8')
+    if hasattr(_sys.stderr, 'reconfigure'):
+        _sys.stderr.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+_os_init.environ.setdefault("PYTHONIOENCODING", "utf-8")
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import Optional, List, Dict
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List, Dict, Any
 import logging
 import os
 from datetime import datetime
 
+# Load environment variables from .env as early as possible
+_env_path = os.path.join(os.path.dirname(__file__), '.env')
+try:
+    if os.path.exists(_env_path):
+        with open(_env_path, 'r', encoding='utf-8') as _f:
+            for _raw in _f:
+                _line = _raw.strip()
+                if not _line or _line.startswith('#') or '=' not in _line:
+                    continue
+                _k, _v = _line.split('=', 1)
+                _k = _k.strip().lstrip('\ufeff')
+                _v = _v.strip().strip('"').strip("'")
+                os.environ[_k] = _v
+except Exception:
+    pass
+
 # Import custom modules
 from config import Config
-from services.detection_service import DetectionService
-from services.improved_detection import ImprovedDetection
-from services.generation_service import GenerationService
-
-# Create logs directory first (before logging configuration)
-os.makedirs("logs", exist_ok=True)
+from services.mongo_service import mongo_service
 
 # Configure logging
 logging.basicConfig(
@@ -85,6 +107,21 @@ class BatchGenerationRequest(BaseModel):
     samples_per_topic: Optional[int] = 5
     strategies: Optional[List[str]] = None
 
+# ============ Auth models ============
+class RegisterRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+
+class LoginRequest(BaseModel):
+    username_or_email: str
+    password: str
+
+class FirebaseSyncRequest(BaseModel):
+    uid: str
+    email: Optional[EmailStr] = None
+    display_name: Optional[str] = None
+
 # Dependency injection  
 def get_detection_service():
     global detection_service
@@ -108,12 +145,14 @@ def get_detection_service():
 def get_improved_detection():
     global improved_detection
     if improved_detection is None:
+        from services.improved_detection import ImprovedDetection  # Lazy import to avoid Torch at startup
         improved_detection = ImprovedDetection()
     return improved_detection
 
 def get_generation_service():
     global generation_service
     if generation_service is None:
+        from services.generation_service import GenerationService
         generation_service = GenerationService()
     return generation_service
 
@@ -144,7 +183,7 @@ async def startup_event():
     # Force initialize detection service immediately with new config
     logger.info("Pre-initializing detection service...")
     try:
-        from services.detection_service import DetectionService
+        from services.detection_service import DetectionService  # Lazy import, may fail if Torch deps missing
         detection_service = DetectionService()
         logger.info(f"✅ Detection service initialized. GPT-4 client: {bool(detection_service.gpt4_client)}")
     except Exception as e:
@@ -162,6 +201,16 @@ async def startup_event():
     except Exception as e:
         logger.error(f"❌ Failed to initialize generation service: {e}")
     
+    # Initialize MongoDB and ensure indexes
+    try:
+        if mongo_service.is_connected():
+            mongo_service.ensure_indexes()
+            logger.info(f"✅ MongoDB connected: {Config.get_mongo_url()} -> DB={mongo_service.database_name}")
+        else:
+            logger.warning(f"⚠️ MongoDB not connected: {Config.get_mongo_url()}")
+    except Exception as e:
+        logger.error(f"❌ MongoDB initialization failed: {e}")
+
     logger.info("System startup completed.")
 
 @app.get("/")
@@ -178,15 +227,168 @@ async def health_check():
         "services": {
             "detection": detection_service is not None,
             "improved_detection": improved_detection is not None,
-            "generation": generation_service is not None
+            "generation": generation_service is not None,
+            "mongodb": mongo_service.is_connected()
         }
     }
+
+@app.get("/db/health")
+async def db_health():
+    """MongoDB health info"""
+    try:
+        return mongo_service.health()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============ Auth endpoints (MongoDB-backed) ============
+import hashlib
+import base64
+import os as _os
+
+def _hash_password(password: str, salt: Optional[str] = None) -> Dict[str, str]:
+    if not salt:
+        salt_bytes = _os.urandom(16)
+        salt = base64.b64encode(salt_bytes).decode()
+    else:
+        salt_bytes = base64.b64decode(salt.encode())
+    h = hashlib.sha256()
+    h.update(salt_bytes + password.encode("utf-8"))
+    return {"salt": salt, "password_hash": h.hexdigest()}
+
+def _client_info(req: Optional[Request]) -> Dict[str, Any]:
+    if not req:
+        return {}
+    ip = None
+    try:
+        if req.client:
+            ip = req.client.host
+    except Exception:
+        ip = None
+    ua = req.headers.get("user-agent", "") if hasattr(req, 'headers') else ""
+    return {"ip": ip, "ua": ua}
+
+@app.post("/api/auth/register")
+async def register_user(body: RegisterRequest, request: Request):
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    users = mongo_service.get_collection("users")
+    # Basic validation to satisfy collection schema
+    if not body.username or len(body.username.strip()) < 3:
+        raise HTTPException(status_code=422, detail="Username must be at least 3 characters")
+    # Check uniqueness
+    if users.find_one({"$or": [{"username": body.username}, {"email": body.email}]}):
+        raise HTTPException(status_code=409, detail="User already exists")
+    hp = _hash_password(body.password)
+    doc = {
+        "username": body.username,
+        "email": str(body.email),
+        "password_hash": hp["password_hash"],
+        "salt": hp["salt"],
+        "role": "user",
+        "is_active": True,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    # Some environments created users collection with strict schema that omits `_id` in allowed fields.
+    # Use bypass_document_validation to avoid 500 caused by validator rejecting implicit _id.
+    inserted = users.insert_one(doc, bypass_document_validation=True)
+    # activity log
+    try:
+        if mongo_service.is_connected():
+            mongo_service.insert_one("user_activity_log", {
+                "action": "register",
+                "user": {"username": body.username, "email": str(body.email)},
+                "request_meta": {},
+                "result_meta": {"user_id": str(inserted.inserted_id)},
+                "client": _client_info(request),
+                "created_at": datetime.utcnow().isoformat()
+            })
+    except Exception:
+        pass
+    return {"success": True, "user_id": str(inserted.inserted_id)}
+
+@app.post("/api/auth/login")
+async def login_user(body: LoginRequest, request: Request):
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    users = mongo_service.get_collection("users")
+    user = users.find_one({
+        "$or": [
+            {"username": body.username_or_email},
+            {"email": body.username_or_email}
+        ]
+    })
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    hp = _hash_password(body.password, salt=user.get("salt"))
+    if hp["password_hash"] != user.get("password_hash"):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    # Update last_login_at best-effort; some schemas disallow extra fields
+    try:
+        users.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"last_login_at": datetime.utcnow().isoformat()}},
+            bypass_document_validation=True
+        )
+    except Exception:
+        pass
+    # activity log
+    try:
+        if mongo_service.is_connected():
+            mongo_service.insert_one("user_activity_log", {
+                "action": "login",
+                "user": {"username": user.get("username"), "email": user.get("email")},
+                "request_meta": {},
+                "result_meta": {"ok": True},
+                "client": _client_info(request),
+                "created_at": datetime.utcnow().isoformat()
+            })
+    except Exception:
+        pass
+    return {"success": True, "username": user.get("username"), "email": user.get("email")}
+
+@app.post("/api/auth/firebase_sync")
+async def firebase_sync(body: FirebaseSyncRequest, request: Request):
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    users = mongo_service.get_collection("users")
+    # Upsert by uid/email
+    key_filter = {"$or": ([{"email": str(body.email)}] if body.email else []) + [{"uid": body.uid}]}
+    if not key_filter["$or"]:
+        key_filter = {"uid": body.uid}
+    update_doc = {
+        "$set": {
+            "uid": body.uid,
+            "email": str(body.email) if body.email else None,
+            "display_name": body.display_name,
+            "is_active": True,
+            "updated_at": datetime.utcnow().isoformat()
+        },
+        "$setOnInsert": {
+            "created_at": datetime.utcnow().isoformat(),
+            "role": "user"
+        }
+    }
+    res = users.update_one(key_filter, update_doc, upsert=True)
+    try:
+        if mongo_service.is_connected():
+            mongo_service.insert_one("user_activity_log", {
+                "action": "firebase_sync",
+                "user": {"uid": body.uid, "email": str(body.email) if body.email else None},
+                "request_meta": {},
+                "result_meta": {"upserted": bool(res.upserted_id)},
+                "client": _client_info(request),
+                "created_at": datetime.utcnow().isoformat()
+            })
+    except Exception:
+        pass
+    return {"success": True, "upserted": bool(res.upserted_id)}
 
 # Detection endpoints
 @app.post("/api/detect/baseline")
 async def baseline_detection(
     request: DetectionRequest,
-    service: DetectionService = Depends(get_detection_service)
+    service: Any = Depends(get_detection_service),
+    http_request: Request = None
 ):
     """Baseline detection"""
     try:
@@ -196,7 +398,33 @@ async def baseline_detection(
             text=request.text,
             image_url_or_b64=request.image_url_or_b64
         )
-        
+        # Write to MongoDB (best-effort)
+        try:
+            if mongo_service.is_connected():
+                mongo_service.insert_one("detection_results", {
+                    "type": "baseline",
+                    "text": request.text,
+                    "image_url_or_b64": request.image_url_or_b64,
+                    "result": result,
+                    "created_at": datetime.utcnow().isoformat()
+                })
+        except Exception:
+            pass
+
+        # activity log
+        try:
+            if mongo_service.is_connected():
+                mongo_service.insert_one("user_activity_log", {
+                    "action": "detect_baseline",
+                    "user": {},
+                    "request_meta": {"text_preview": request.text[:100]},
+                    "result_meta": {"ok": True},
+                    "client": _client_info(http_request),
+                    "created_at": datetime.utcnow().isoformat()
+                })
+        except Exception:
+            pass
+
         return {
             "success": True,
             "result": result,
@@ -209,8 +437,9 @@ async def baseline_detection(
 @app.post("/api/detect/improved")
 async def improved_detection_endpoint(
     request: HybridDetectionRequest,
-    detection_service: DetectionService = Depends(get_detection_service),
-    improved_service: ImprovedDetection = Depends(get_improved_detection)
+    detection_service: Any = Depends(get_detection_service),
+    improved_service: Any = Depends(get_improved_detection),
+    http_request: Request = None
 ):
     """Improved detection with customizable configuration"""
     try:
@@ -234,7 +463,35 @@ async def improved_detection_endpoint(
                 image_metadata=None,  # Can be extended with image metadata
                 detection_config=config  # NEW: Pass custom configuration
             )
-            
+            # Write to MongoDB (best-effort)
+            try:
+                if mongo_service.is_connected():
+                    mongo_service.insert_one("detection_results", {
+                        "type": "improved",
+                        "text": request.text,
+                        "image_url_or_b64": request.image_url_or_b64,
+                        "config": config,
+                        "baseline": baseline_results,
+                        "result": improved_results,
+                        "created_at": datetime.utcnow().isoformat()
+                    })
+            except Exception:
+                pass
+
+            # activity log
+            try:
+                if mongo_service.is_connected():
+                    mongo_service.insert_one("user_activity_log", {
+                        "action": "detect_improved",
+                        "user": {},
+                        "request_meta": {"text_preview": request.text[:100], "use_improved": True},
+                        "result_meta": {"ok": True},
+                        "client": _client_info(http_request),
+                        "created_at": datetime.utcnow().isoformat()
+                    })
+            except Exception:
+                pass
+
             return {
                 "success": True,
                 "result": improved_results,
@@ -247,6 +504,20 @@ async def improved_detection_endpoint(
                 image_url_or_b64=request.image_url_or_b64
             )
             
+            # activity log (baseline-only path)
+            try:
+                if mongo_service.is_connected():
+                    mongo_service.insert_one("user_activity_log", {
+                        "action": "detect_baseline",
+                        "user": {},
+                        "request_meta": {"text_preview": request.text[:100]},
+                        "result_meta": {"ok": True},
+                        "client": _client_info(http_request),
+                        "created_at": datetime.utcnow().isoformat()
+                    })
+            except Exception:
+                pass
+
             return {
                 "success": True,
                 "result": result,
@@ -260,7 +531,8 @@ async def improved_detection_endpoint(
 @app.post("/api/generate/single")
 async def generate_single(
     request: GenerationRequest,
-    service: GenerationService = Depends(get_generation_service)
+    service: Any = Depends(get_generation_service),
+    http_request: Request = None
 ):
     """Generate single fake news sample"""
     try:
@@ -268,9 +540,36 @@ async def generate_single(
         
         request_dict = request.dict()
         result = service.generate_fake_news(request_dict)
-        
+        # Write to MongoDB (best-effort)
+        try:
+            if mongo_service.is_connected():
+                mongo_service.insert_one("generation_results", {
+                    "topic": request.topic,
+                    "strategy": request.strategy,
+                    "model_type": request.model_type,
+                    "params": request_dict,
+                    "result": result,
+                    "created_at": datetime.utcnow().isoformat()
+                })
+        except Exception:
+            pass
+
+        # activity log
+        try:
+            if mongo_service.is_connected():
+                mongo_service.insert_one("user_activity_log", {
+                    "action": "generate_single",
+                    "user": {},
+                    "request_meta": {"topic": request.topic, "strategy": request.strategy},
+                    "result_meta": {"ok": True},
+                    "client": _client_info(http_request),
+                    "created_at": datetime.utcnow().isoformat()
+                })
+        except Exception:
+            pass
+
         return {
-            "success": result.get("success", False),
+            "success": True,
             "result": result,
             "timestamp": datetime.now().isoformat()
         }
@@ -281,7 +580,8 @@ async def generate_single(
 @app.post("/api/generate/batch")
 async def generate_batch(
     request: BatchGenerationRequest,
-    service: GenerationService = Depends(get_generation_service)
+    service: Any = Depends(get_generation_service),
+    http_request: Request = None
 ):
     """Batch generate fake news samples"""
     try:
@@ -292,7 +592,35 @@ async def generate_batch(
             strategy=request.strategies[0] if request.strategies else None,
             samples_per_topic=request.samples_per_topic or 1
         )
-        
+        # Write to MongoDB (best-effort)
+        try:
+            if mongo_service.is_connected():
+                for r in results:
+                    mongo_service.insert_one("generation_results", {
+                        "topic": r.get("topic"),
+                        "strategy": r.get("strategy"),
+                        "model_type": r.get("model"),
+                        "params": {"strategy": request.strategies[0] if request.strategies else None, "samples_per_topic": request.samples_per_topic or 1},
+                        "result": r,
+                        "created_at": datetime.utcnow().isoformat()
+                    })
+        except Exception:
+            pass
+
+        # activity log
+        try:
+            if mongo_service.is_connected():
+                mongo_service.insert_one("user_activity_log", {
+                    "action": "generate_batch",
+                    "user": {},
+                    "request_meta": {"topics": len(request.topics), "samples_per_topic": request.samples_per_topic or 1},
+                    "result_meta": {"ok": True, "total": len(results)},
+                    "client": _client_info(http_request),
+                    "created_at": datetime.utcnow().isoformat()
+                })
+        except Exception:
+            pass
+
         return {
             "success": True,
             "results": results,
@@ -306,7 +634,7 @@ async def generate_batch(
 # Information query endpoints
 @app.get("/api/info/strategies")
 async def get_strategies(
-    service: GenerationService = Depends(get_generation_service)
+    service: Any = Depends(get_generation_service)
 ):
     """Get available generation strategies"""
     try:
@@ -322,7 +650,7 @@ async def get_strategies(
 
 @app.get("/api/info/models")
 async def get_models(
-    service: GenerationService = Depends(get_generation_service)
+    service: Any = Depends(get_generation_service)
 ):
     """Get available models"""
     try:
@@ -338,8 +666,8 @@ async def get_models(
 
 @app.get("/api/info/service")
 async def get_service_info(
-    detection_service: DetectionService = Depends(get_detection_service),
-    generation_service: GenerationService = Depends(get_generation_service)
+    detection_service: Any = Depends(get_detection_service),
+    generation_service: Any = Depends(get_generation_service)
 ):
     """Get service information"""
     try:
@@ -388,13 +716,17 @@ if __name__ == "__main__":
     # Load environment variables from .env file if it exists
     env_file = os.path.join(os.path.dirname(__file__), '.env')
     if os.path.exists(env_file):
-        with open(env_file, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    os.environ[key] = value
-                    print(f"Loaded env var: {key}")
+        with open(env_file, 'r', encoding='utf-8') as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                # Remove BOM and surrounding whitespace/quotes
+                key = key.strip().lstrip('\ufeff')
+                value = value.strip().strip('"').strip("'")
+                os.environ[key] = value
+                print(f"Loaded env var: {key}")
     
     # Clear module cache to ensure fresh imports with new env vars
     modules_to_clear = [k for k in list(sys.modules.keys()) if 'detection' in k.lower() or 'config' in k.lower()]
@@ -402,7 +734,9 @@ if __name__ == "__main__":
         del sys.modules[module]
         print(f"Cleared cache: {module}")
     
-    # Logs directory already created at module level
+    # Create logs directory
+    os.makedirs("logs", exist_ok=True)
+    
     # Start service (reload=False to preserve environment variables)
     uvicorn.run(
         "main:app",

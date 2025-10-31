@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiService } from "../services/api";
 
 const SignUp = () => {
   const navigate = useNavigate();
@@ -14,14 +15,19 @@ const SignUp = () => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (form.password !== form.confirmPassword) {
       alert("The two passwords do not match!");
       return;
     }
-    console.log("submit:", form);
-    navigate("/sign-in");
+    try {
+      await apiService.register(form.username, form.email, form.password);
+      alert("Registration successful, please sign in.");
+      navigate("/sign-in");
+    } catch (err: any) {
+      alert(err?.message || "Registration failed");
+    }
   };
 
   const inputCls =

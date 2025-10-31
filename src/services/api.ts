@@ -13,8 +13,7 @@ export interface DetectionResponse {
     confidence: number;
     explanation: any;
     detectgpt: any;
-    wikipedia_verification?: any;  // Keep for backward compatibility
-    tavily_verification?: any;  // Tavily verification
+    wikipedia_verification: any;
     key_factors: string[];
   };
   timestamp: string;
@@ -92,6 +91,15 @@ class ApiService {
 
   async checkHealth(): Promise<{ status: string; services: any }> {
     return this.makeRequest<{ status: string; services: any }>('/health');
+  }
+
+  // ===== Auth =====
+  async register(username: string, email: string, password: string): Promise<{ success: boolean; user_id: string }> {
+    return this.makeRequest('/api/auth/register', 'POST', { username, email, password });
+  }
+
+  async login(usernameOrEmail: string, password: string): Promise<{ success: boolean; username: string; email: string }> {
+    return this.makeRequest('/api/auth/login', 'POST', { username_or_email: usernameOrEmail, password });
   }
 }
 

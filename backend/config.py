@@ -23,8 +23,18 @@ class Config:
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     
     # Database Configuration
-    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-    MONGODB_DATABASE: str = os.getenv("MONGODB_DATABASE", "fakenews_db")
+    # 优先使用完整连接串 MONGODB_URL，否则根据以下变量组装：
+    # MONGODB_USER/MONGODB_PASSWORD/MONGODB_HOST/MONGODB_PORT/MONGODB_DATABASE
+    MONGODB_USER: Optional[str] = os.getenv("MONGODB_USER", os.getenv("MONGO_INITDB_ROOT_USERNAME", "admin"))
+    MONGODB_PASSWORD: Optional[str] = os.getenv("MONGODB_PASSWORD", os.getenv("MONGO_INITDB_ROOT_PASSWORD", "admin123"))
+    MONGODB_HOST: str = os.getenv("MONGODB_HOST", "127.0.0.1")
+    MONGODB_PORT: str = os.getenv("MONGODB_PORT", "27017")
+    MONGODB_DATABASE: str = os.getenv("MONGODB_DATABASE", os.getenv("MONGO_INITDB_DATABASE", "fakenews_db"))
+    # 若提供 MONGODB_URL 则优先使用，否则按上面变量自动拼接，并默认 authSource=admin 以兼容 docker-compose 设置
+    MONGODB_URL: str = os.getenv(
+        "MONGODB_URL",
+        f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}/{MONGODB_DATABASE}?authSource=admin"
+    )
     
     # Model Configuration
     DEFAULT_GPT_MODEL: str = "gpt-4o"
@@ -68,4 +78,9 @@ class Config:
     def get_default_model(cls) -> str:
         """Get default model"""
         return cls.DEFAULT_GPT_MODEL
+
+    @classmethod
+    def get_mongo_url(cls) -> str:
+        """获取 Mongo 连接字符串（优先使用已设置的 MONGODB_URL）"""
+        return cls.MONGODB_URL
     

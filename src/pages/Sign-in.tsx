@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithPopup } from "firebase/auth";
 import { auth, googleProvider, githubProvider } from "@/lib/firebase";
+import { apiService } from "../services/api";
 
 interface Props {
   setIsLoggedIn: (value: boolean) => void;
@@ -24,15 +25,13 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
     setLoading(true);
     setError(null);
     try {
-      console.log("login with email/password:", form);
-
-      // save to localStorage
+      const res = await apiService.login(form.email, form.password);
       localStorage.setItem(
         "user",
         JSON.stringify({
           uid: "local-" + Date.now(),
-          displayName: form.email.split("@")[0],
-          email: form.email,
+          displayName: res.username,
+          email: res.email,
           photoURL: null,
           provider: "password",
         })
@@ -66,6 +65,15 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
           provider,
         })
       );
+
+      // 同步到后端（Mongo）
+      try {
+        await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/auth/firebase_sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: res.user.uid, email: res.user.email, display_name: res.user.displayName })
+        });
+      } catch {}
 
       setIsLoggedIn(true);
       navigate("/profile");
