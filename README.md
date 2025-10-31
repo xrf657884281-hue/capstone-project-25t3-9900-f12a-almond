@@ -21,15 +21,46 @@ cd capstone-project-25t3-9900-f12a-almond
 ```bash
 cd backend
 
-# Copy environment file (contains shared API keys)
-cp .env.example .env
+# Option 1: Use automatic setup script (Recommended)
+chmod +x setup.sh
+./setup.sh
 
-# Install dependencies
-pip install -r requirements.txt
+# Option 2: Manual setup
+# Create logs directory
+mkdir -p logs
+
+# Install Python dependencies
+pip3 install -r requirements.txt
+
+# Download spaCy English model (Required)
+python3 -m spacy download en_core_web_sm
+
+# Download NLTK data (Required)
+python3 <<EOF
+import nltk
+nltk.download('punkt', quiet=True)
+nltk.download('stopwords', quiet=True)
+nltk.download('averaged_perceptron_tagger', quiet=True)
+EOF
+
+# Create .env file with API keys
+# Copy from .env.example or create manually
+if [ ! -f .env ]; then
+    cat > .env <<ENVEOF
+OPENAI_API_KEY=your_openai_api_key_here
+TAVILY_API_KEY=your_tavily_api_key_here
+MONGODB_URL=mongodb://localhost:27017
+LOG_LEVEL=INFO
+LOG_FILE=logs/fakenews.log
+ENVEOF
+    echo "⚠️  Please update .env file with your API keys"
+fi
 
 # Start backend server
-python main.py
+python3 main.py
 ```
+
+**⚠️ Important**: The `setup.sh` script handles all of the above automatically!
 
 #### 3. Frontend Setup
 ```bash

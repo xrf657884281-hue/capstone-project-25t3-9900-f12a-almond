@@ -17,6 +17,9 @@ from services.detection_service import DetectionService
 from services.improved_detection import ImprovedDetection
 from services.generation_service import GenerationService
 
+# Create logs directory first (before logging configuration)
+os.makedirs("logs", exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, Config.LOG_LEVEL),
@@ -399,9 +402,7 @@ if __name__ == "__main__":
         del sys.modules[module]
         print(f"Cleared cache: {module}")
     
-    # Create logs directory
-    os.makedirs("logs", exist_ok=True)
-    
+    # Logs directory already created at module level
     # Start service (reload=False to preserve environment variables)
     uvicorn.run(
         "main:app",
