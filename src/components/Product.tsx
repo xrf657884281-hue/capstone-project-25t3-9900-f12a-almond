@@ -1,5 +1,6 @@
 import { Separator } from "@radix-ui/react-separator"
 import { BarChart3, FileSearch, Wand2 } from "lucide-react"
+import EarthCanvas from "./earth/earth"
 
 
 const Product = () => {
@@ -40,9 +41,14 @@ const Product = () => {
                     Insight, visualized. Turn text analysis into clear, interactive charts and story-led dashboards—then auto-generate shareable, cited reports with key takeaways. Align faster, decide smarter, and save hours from data to decision.
                 </p>
 
-            <div className="pb-24 lg:pb-32"></div>
-
             </div>
+
+            <aside className="pb-24 lg:pb-32">
+                <div id="earth-box" className="relative w-full h-full overflow-hidden rounded-xl">
+                    <EarthCanvas className="w-full h-full" />
+                </div>
+                              
+            </aside>
 
         </section>
       
