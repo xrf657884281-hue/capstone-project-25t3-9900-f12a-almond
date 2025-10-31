@@ -228,7 +228,7 @@ const Result = () => {
           </Card>
 
           {/* Tavily Fact Verification */}
-          {analysis.details?.wikipedia_verification && (
+          {(analysis.details?.tavily_verification || analysis.details?.wikipedia_verification) && (
             <Card className="border border-border">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-3">
@@ -238,42 +238,54 @@ const Result = () => {
                   </span>
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Verification Score</span>
-                    <span className={`font-semibold ${
-                      (analysis.details.wikipedia_verification.overall_score * 100) < 30 
-                        ? 'text-red-600' 
-                        : (analysis.details.wikipedia_verification.overall_score * 100) < 60 
-                        ? 'text-yellow-600' 
-                        : 'text-green-600'
-                    }`}>
-                      {(analysis.details.wikipedia_verification.overall_score * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                  <Progress value={analysis.details.wikipedia_verification.overall_score * 100} />
-                  
-                  <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-                    <div className="bg-gray-50 rounded p-2">
-                      <div className="text-gray-500 mb-1 font-bold">Coverage</div>
-                      <div className="font-semibold text-lg mb-1">{(analysis.details.wikipedia_verification.wikipedia_coverage * 100).toFixed(0)}%</div>
-                      <div className="text-gray-400 text-[10px]">
-                        {analysis.details.wikipedia_verification.wikipedia_coverage >= 0.8 
-                          ? '✅ High coverage' 
-                          : analysis.details.wikipedia_verification.wikipedia_coverage >= 0.5 
-                          ? '⚠️ Moderate coverage' 
-                          : '❌ Low coverage'}
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 rounded p-2">
-                      <div className="text-gray-500 mb-1 font-bold">Entities Found</div>
-                      <div className="font-semibold text-lg mb-1">{analysis.details.wikipedia_verification.entities_found}/{analysis.details.wikipedia_verification.entities_checked}</div>
-                      <div className="text-gray-400 text-[10px]">
-                        {analysis.details.wikipedia_verification.entities_checked > 0 
-                          ? `${((analysis.details.wikipedia_verification.entities_found / analysis.details.wikipedia_verification.entities_checked) * 100).toFixed(0)}% verified` 
-                          : 'No entities checked'}
-                      </div>
-                    </div>
-                  </div>
+                  {(() => {
+                    const verification = analysis.details?.tavily_verification || analysis.details?.wikipedia_verification;
+                    const coverage = verification?.tavily_coverage || verification?.wikipedia_coverage || 0;
+                    const score = verification?.overall_score || 0;
+                    const entitiesFound = verification?.entities_found || 0;
+                    const entitiesChecked = verification?.entities_checked || 1;
+                    
+                    return (
+                      <>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Verification Score</span>
+                          <span className={`font-semibold ${
+                            (score * 100) < 30 
+                              ? 'text-red-600' 
+                              : (score * 100) < 60 
+                              ? 'text-yellow-600' 
+                              : 'text-green-600'
+                          }`}>
+                            {(score * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                        <Progress value={score * 100} />
+                        
+                        <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+                          <div className="bg-gray-50 rounded p-2">
+                            <div className="text-gray-500 mb-1 font-bold">Coverage</div>
+                            <div className="font-semibold text-lg mb-1">{(coverage * 100).toFixed(0)}%</div>
+                            <div className="text-gray-400 text-[10px]">
+                              {coverage >= 0.8 
+                                ? '✅ High coverage' 
+                                : coverage >= 0.5 
+                                ? '⚠️ Moderate coverage' 
+                                : '❌ Low coverage'}
+                            </div>
+                          </div>
+                          <div className="bg-gray-50 rounded p-2">
+                            <div className="text-gray-500 mb-1 font-bold">Entities Found</div>
+                            <div className="font-semibold text-lg mb-1">{entitiesFound}/{entitiesChecked}</div>
+                            <div className="text-gray-400 text-[10px]">
+                              {entitiesChecked > 0 
+                                ? `${((entitiesFound / entitiesChecked) * 100).toFixed(0)}% verified` 
+                                : 'No entities checked'}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>

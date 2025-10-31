@@ -326,7 +326,7 @@ class DetectorFusion:
                 0.05,  # RoBERTa score
                 0.05,  # Rhetorical features
                 0.05,  # Consistency features
-                0.10,  # Wikipedia/Tavily verification
+                0.10,  # Tavily verification
                 0.02,  # Additional features
                 0.03,  # Cross-modal features
                 0.02,  # Sentiment features
@@ -567,17 +567,17 @@ class ImprovedDetection:
         
         # Parse configuration
         config = detection_config or {}
-        use_wikipedia = config.get('use_wikipedia', True)
+        use_verification = config.get('use_wikipedia', True)  # Keep 'use_wikipedia' key for backward compatibility
         use_rhetorical = config.get('use_rhetorical', True)
         use_consistency = config.get('use_consistency', True)
         threshold = config.get('threshold', 0.5)
-        wikipedia_weight = config.get('wikipedia_weight', 1.0)
+        tavily_weight = config.get('wikipedia_weight', 1.0)  # Keep 'wikipedia_weight' key for backward compatibility
         
-        logger.info(f"Detection config: Wikipedia={use_wikipedia}, Rhetorical={use_rhetorical}, Consistency={use_consistency}, Threshold={threshold}, Wiki_Weight={wikipedia_weight}")
+        logger.info(f"Detection config: Verification={use_verification}, Rhetorical={use_rhetorical}, Consistency={use_consistency}, Threshold={threshold}, Tavily_Weight={tavily_weight}")
         
 
-        wikipedia_verification = {}
-        if self.verifier and use_wikipedia:  # Check if verification is enabled
+        tavily_verification = {}
+        if self.verifier and use_verification:  # Check if verification is enabled
             try:
                 logger.info(f"🔍 [FAST PATH] Performing fact pre-verification using {self.verifier_type}...")
                 # Timeout control
@@ -591,9 +591,10 @@ class ImprovedDetection:
                 
                 # Use Tavily verification
                 quick_score = self.verifier.quick_check(text)
-                wikipedia_verification = {
+                tavily_verification = {
                     'overall_score': quick_score,
-                    'wikipedia_coverage': 1.0 if quick_score > 0.5 else 0.5,
+                    'tavily_coverage': 1.0 if quick_score > 0.5 else 0.5,
+                    'wikipedia_coverage': 1.0 if quick_score > 0.5 else 0.5,  # Keep for backward compatibility
                     'entities_found': 1,
                     'entities_checked': 1,
                     'claims_verified': 1 if quick_score > 0.7 else 0,
@@ -603,18 +604,18 @@ class ImprovedDetection:
                 
                 signal.alarm(0)  # 取消超时
                 
-                wiki_score = wikipedia_verification.get('overall_score', 0.0)
-                wiki_coverage = wikipedia_verification.get('wikipedia_coverage', 0.0)
-                verification_summary = wikipedia_verification.get('verification_summary', {})
-                claims_verified = verification_summary.get('claims_verified', 0)
-                total_claims = verification_summary.get('total_claims_checked', 0)
-                entities_found = verification_summary.get('entities_found', 0)
-                total_entities = verification_summary.get('total_entities_checked', 0)
+                tavily_score = tavily_verification.get('overall_score', 0.0)
+                tavily_coverage = tavily_verification.get('tavily_coverage', 0.0)
+                verification_summary = tavily_verification.get('verification_summary', {})
+                claims_verified = verification_summary.get('claims_verified', tavily_verification.get('claims_verified', 0))
+                total_claims = verification_summary.get('total_claims_checked', tavily_verification.get('claims_checked', 1))
+                entities_found = verification_summary.get('entities_found', tavily_verification.get('entities_found', 0))
+                total_entities = verification_summary.get('total_entities_checked', tavily_verification.get('entities_checked', 1))
                 
                 # Get verifier name for logging
-                verifier_name = wikipedia_verification.get('provider', self.verifier_type).title()
+                verifier_name = tavily_verification.get('provider', self.verifier_type).title()
                 
-                logger.info(f"📊 {verifier_name} Score: {wiki_score:.3f}, Coverage: {wiki_coverage:.3f}, "
+                logger.info(f"📊 {verifier_name} Score: {tavily_score:.3f}, Coverage: {tavily_coverage:.3f}, "
                            f"Claims: {claims_verified}/{total_claims}, Entities: {entities_found}/{total_entities}")
                 
                 # 🎯 FAST PATH CONDITION: High verification = likely REAL news
@@ -623,17 +624,17 @@ class ImprovedDetection:
                 entities_ratio = entities_found / total_entities if total_entities > 0 else 0.0
                 
                 # Strict criteria for fast path: HIGH verification across all metrics
-                if (wiki_score >= 0.75 and wiki_coverage >= 0.65 and 
+                if (tavily_score >= 0.75 and tavily_coverage >= 0.65 and 
                     claims_ratio >= 0.75 and entities_ratio >= 0.70 and
                     total_claims >= 2 and total_entities >= 2):
                     
                     logger.info(f"✅ [FAST PATH] HIGH {verifier_name} verification detected! "
                                f"Skipping expensive model analysis. "
-                               f"Score: {wiki_score:.3f}, Coverage: {wiki_coverage:.3f}, "
+                               f"Score: {tavily_score:.3f}, Coverage: {tavily_coverage:.3f}, "
                                f"Claims: {claims_verified}/{total_claims}, Entities: {entities_found}/{total_entities}")
                     
                     # Generate fast path result (skip expensive baseline detection)
-                    fast_fake_prob = max(0.0, 0.15 - (wiki_score - 0.75) * 0.3)  # Very low fake probability
+                    fast_fake_prob = max(0.0, 0.15 - (tavily_score - 0.75) * 0.3)  # Very low fake probability
                     
                     fast_result = {
                         'baseline_results': baseline_results,
@@ -642,10 +643,11 @@ class ImprovedDetection:
                         'fusion_result': {
                             'fake_probability': fast_fake_prob,
                             'confidence': 0.90,
-                            'method': 'wikipedia_fast_path'
+                            'method': 'tavily_fast_path'
                         },
                         'fact_verification': baseline_results.get('fact_verification', {}),
-                        'wikipedia_verification': wikipedia_verification,
+                        'wikipedia_verification': tavily_verification,  # Keep for backward compatibility
+                        'tavily_verification': tavily_verification,
                         'fast_path': True,  # Flag to indicate fast path was used
                         'final_prediction': {
                             'prediction': 'real',
@@ -655,15 +657,25 @@ class ImprovedDetection:
                                 'base_fusion_score': fast_fake_prob,
                                 'consistency_adjustment': 0.0,
                                 'rhetorical_adjustment': 0.0,
-                                'wikipedia_adjustment': 0.0,
-                                'wikipedia_boost': -(0.35 + (wiki_score - 0.75) * 0.4),  # Strong boost
+                                'wikipedia_adjustment': 0.0,  # Keep for backward compatibility
+                                'tavily_adjustment': 0.0,
+                                'wikipedia_boost': -(0.35 + (tavily_score - 0.75) * 0.4),  # Keep for backward compatibility
+                                'tavily_boost': -(0.35 + (tavily_score - 0.75) * 0.4),
                                 'final_score': fast_fake_prob,
                                 'confidence': 0.90,
                                 'key_factors': [f'high_{self.verifier_type}_verification', f'{self.verifier_type}_fast_path'],
-                                'fast_path_reason': f'Tavily verification very high (score: {wiki_score:.2%}, coverage: {wiki_coverage:.2%}, claims: {claims_verified}/{total_claims}, entities: {entities_found}/{total_entities})',
-                                'wikipedia_details': {
-                                    'verification_score': wiki_score,
-                                    'coverage': wiki_coverage,
+                                'fast_path_reason': f'Tavily verification very high (score: {tavily_score:.2%}, coverage: {tavily_coverage:.2%}, claims: {claims_verified}/{total_claims}, entities: {entities_found}/{total_entities})',
+                                'wikipedia_details': {  # Keep for backward compatibility
+                                    'verification_score': tavily_score,
+                                    'coverage': tavily_coverage,
+                                    'entities_found': entities_found,
+                                    'entities_checked': total_entities,
+                                    'claims_verified': claims_verified,
+                                    'claims_checked': total_claims
+                                },
+                                'tavily_details': {
+                                    'verification_score': tavily_score,
+                                    'coverage': tavily_coverage,
                                     'entities_found': entities_found,
                                     'entities_checked': total_entities,
                                     'claims_verified': claims_verified,
@@ -675,7 +687,7 @@ class ImprovedDetection:
                     
                     # Generate detailed report for fast path too
                     fast_result['detailed_report'] = self._generate_detailed_report(
-                        text, fast_result, wikipedia_verification, {}, {}
+                        text, fast_result, tavily_verification, {}, {}
                     )
                     
                     logger.info(f"💰 [COST SAVED] Skipped expensive GPT-4/model analysis for clearly real news!")
@@ -687,10 +699,10 @@ class ImprovedDetection:
                     
             except TimeoutError:
                 logger.warning(f"{self.verifier_type.title()} verification timeout, using fallback")
-                wikipedia_verification = {'error': 'timeout', 'overall_score': 0.0, 'provider': self.verifier_type}
+                tavily_verification = {'error': 'timeout', 'overall_score': 0.0, 'provider': self.verifier_type, 'tavily_coverage': 0.0, 'wikipedia_coverage': 0.0}
             except Exception as e:
                 logger.error(f"{self.verifier_type.title()} verification failed: {e}")
-                wikipedia_verification = {'error': str(e), 'overall_score': 0.0, 'provider': self.verifier_type}
+                tavily_verification = {'error': str(e), 'overall_score': 0.0, 'provider': self.verifier_type, 'tavily_coverage': 0.0, 'wikipedia_coverage': 0.0}
         
         # ========== NORMAL PATH: Full Analysis (if fact verification is low/inconclusive) ==========
         logger.info("🔄 [NORMAL PATH] Performing comprehensive detection analysis...")
@@ -725,30 +737,31 @@ class ImprovedDetection:
             'consistency_check': consistency_check,
             'fusion_result': fusion_result,
             'fact_verification': fact_verification,  # Added
-            'wikipedia_verification': wikipedia_verification,  # Fact checking (Tavily)
+            'wikipedia_verification': tavily_verification,  # Keep for backward compatibility
+            'tavily_verification': tavily_verification,  # Fact checking (Tavily)
             'fast_path': False,  # Flag to indicate normal path was used
             'final_prediction': self._generate_final_prediction(
                 fusion_result, 
                 consistency_check, 
                 rhetorical_features,
                 fact_verification,  # Added
-                wikipedia_verification,  # NEW - Wikipedia results
-                wikipedia_weight,  # NEW - User-defined weight
-                threshold,  # NEW - User-defined threshold
-                text  # NEW - Original text for analysis
+                tavily_verification,  # Tavily verification results
+                tavily_weight,  # User-defined weight
+                threshold,  # User-defined threshold
+                text  # Original text for analysis
             )
         }
         
         # Convert all numpy types to Python native types
         # Generate detailed report with highlighted issues
         improved_result['detailed_report'] = self._generate_detailed_report(
-            text, improved_result, wikipedia_verification, rhetorical_features, consistency_check
+            text, improved_result, tavily_verification, rhetorical_features, consistency_check
         )
         
         return convert_to_native_types(improved_result)
     
     def _generate_detailed_report(self, text: str, detection_result: Dict, 
-                                 wikipedia_verification: Optional[Dict] = None,
+                                 tavily_verification: Optional[Dict] = None,
                                  rhetorical_features: Optional[Dict] = None,
                                  consistency_check: Optional[Dict] = None) -> Dict:
         """Generate detailed detection report with highlighted issues"""
@@ -767,16 +780,23 @@ class ImprovedDetection:
         }
         
         # Highlight fact verification issues
-        if wikipedia_verification:
-            wiki_issues = self._highlight_wikipedia_issues(text, wikipedia_verification)
-            report['issues_found'].extend(wiki_issues['issues'])
-            report['highlighted_text'] = wiki_issues['highlighted_text']
-            report['detailed_analysis']['wikipedia_verification'] = {
-                'score': wikipedia_verification.get('overall_score', 0.0),
-                'coverage': wikipedia_verification.get('wikipedia_coverage', 0.0),
-                'entities_found': wikipedia_verification.get('verification_summary', {}).get('entities_found', 0),
-                'claims_verified': wikipedia_verification.get('verification_summary', {}).get('claims_verified', 0),
-                'issues': wiki_issues['issues']
+        if tavily_verification:
+            tavily_issues = self._highlight_tavily_issues(text, tavily_verification)
+            report['issues_found'].extend(tavily_issues['issues'])
+            report['highlighted_text'] = tavily_issues['highlighted_text']
+            report['detailed_analysis']['wikipedia_verification'] = {  # Keep for backward compatibility
+                'score': tavily_verification.get('overall_score', 0.0),
+                'coverage': tavily_verification.get('tavily_coverage', tavily_verification.get('wikipedia_coverage', 0.0)),
+                'entities_found': tavily_verification.get('verification_summary', {}).get('entities_found', 0),
+                'claims_verified': tavily_verification.get('verification_summary', {}).get('claims_verified', 0),
+                'issues': tavily_issues['issues']
+            }
+            report['detailed_analysis']['tavily_verification'] = {
+                'score': tavily_verification.get('overall_score', 0.0),
+                'coverage': tavily_verification.get('tavily_coverage', tavily_verification.get('wikipedia_coverage', 0.0)),
+                'entities_found': tavily_verification.get('verification_summary', {}).get('entities_found', 0),
+                'claims_verified': tavily_verification.get('verification_summary', {}).get('claims_verified', 0),
+                'issues': tavily_issues['issues']
             }
         
         # Highlight rhetorical issues
@@ -1009,13 +1029,13 @@ class ImprovedDetection:
         }
         return severity_map.get(issue_type, 'Medium')
     
-    def _highlight_wikipedia_issues(self, text: str, wikipedia_verification: Dict) -> Dict:
+    def _highlight_tavily_issues(self, text: str, tavily_verification: Dict) -> Dict:
         """Highlight fact verification issues in text"""
         issues = []
         highlighted_text = text
         
         # Check for unverified entities
-        entity_results = wikipedia_verification.get('entity_results', [])
+        entity_results = tavily_verification.get('entity_results', [])
         for entity_result in entity_results:
             if not entity_result.get('found', False):
                 entity = entity_result.get('entity', '')
@@ -1032,7 +1052,7 @@ class ImprovedDetection:
                     })
         
         # Check for unverified claims
-        claim_results = wikipedia_verification.get('claim_results', [])
+        claim_results = tavily_verification.get('claim_results', [])
         for claim_result in claim_results:
             if not claim_result.get('verified', False):
                 claim = claim_result.get('claim', '')
@@ -1049,7 +1069,7 @@ class ImprovedDetection:
                     })
         
         # Check for low verification scores
-        overall_score = wikipedia_verification.get('overall_score', 0.0)
+        overall_score = tavily_verification.get('overall_score', 0.0)
         if overall_score < 0.6:
             issues.append({
                 'type': 'low_verification_score',
@@ -1219,8 +1239,8 @@ class ImprovedDetection:
     
     def _generate_final_prediction(self, fusion_result: Dict, consistency_check: Dict, 
                                    rhetorical_features: Dict, fact_verification: Optional[Dict] = None,
-                                   wikipedia_verification: Optional[Dict] = None,
-                                   wikipedia_weight: float = 1.0,
+                                   tavily_verification: Optional[Dict] = None,
+                                   tavily_weight: float = 1.0,
                                    threshold: float = 0.5,
                                    text: str = "") -> Dict:
         """Generate final prediction result with customizable parameters"""
@@ -1250,71 +1270,75 @@ class ImprovedDetection:
         loaded_language = rhetorical_features.get('loaded_language', {})
         rhetorical_adjustment = sum(loaded_language.values()) * 0.1  # Loaded language increases fake news probability
         
-        # Wikipedia verification adjustment (ENHANCED)
-        wikipedia_adjustment = 0.0
-        wikipedia_boost = 0.0  # NEW: Positive adjustment for high Wikipedia verification
-        contradiction_penalty = 0.0  # NEW: Extra penalty for extremely low Wikipedia verification
+        # Tavily verification adjustment (ENHANCED)
+        tavily_adjustment = 0.0
+        tavily_boost = 0.0  # Positive adjustment for high Tavily verification
+        contradiction_penalty = 0.0  # Extra penalty for extremely low Tavily verification
         
-        if wikipedia_verification and 'overall_score' in wikipedia_verification:
-            # Low Wikipedia coverage/verification increases fake news probability
-            wiki_score = wikipedia_verification.get('overall_score', 0.0)
-            wiki_coverage = wikipedia_verification.get('wikipedia_coverage', 0.0)
+        if tavily_verification and 'overall_score' in tavily_verification:
+            # Low Tavily coverage/verification increases fake news probability
+            tavily_score = tavily_verification.get('overall_score', 0.0)
+            tavily_coverage = tavily_verification.get('tavily_coverage', tavily_verification.get('wikipedia_coverage', 0.0))
             
-        # OPTION A: Wikipedia weight (REDUCED from 0.45/0.30 to 0.20/0.15) - Apply user weight multiplier
-        base_wiki_adjustment = (1.0 - wiki_score) * 0.20 + (1.0 - wiki_coverage) * 0.15
-        wikipedia_adjustment = base_wiki_adjustment * wikipedia_weight  # Apply user-defined weight
+        # OPTION A: Tavily weight (REDUCED from 0.45/0.30 to 0.20/0.15) - Apply user weight multiplier
+        if tavily_verification and 'overall_score' in tavily_verification:
+            base_tavily_adjustment = (1.0 - tavily_score) * 0.20 + (1.0 - tavily_coverage) * 0.15
+            tavily_adjustment = base_tavily_adjustment * tavily_weight  # Apply user-defined weight
             
-        # OPTION B: Extra penalty for low Wikipedia verification (REDUCED from 0.40 to 0.15) - Apply user weight multiplier
-        if wiki_score < 0.5 or wiki_coverage < 0.6:  # More lenient threshold (changed from 0.6/0.7 to 0.5/0.6)
-            base_contradiction_penalty = 0.15  # Reduced penalty for low verification (was 0.40)
-            contradiction_penalty = base_contradiction_penalty * wikipedia_weight  # Apply user-defined weight
-            logger.warning(f"TAVILY LOW VERIFICATION: +{contradiction_penalty:.2f} penalty (score: {wiki_score:.3f}, coverage: {wiki_coverage:.3f})")
-        
-        # NEW: Check for Tavily contradictions (high coverage but potentially wrong facts)
-        if wiki_coverage >= 0.8 and wiki_score >= 0.7:  # High coverage and score
-            # Check if this might be a subtle fake news with wrong facts
-            claims_verified = wikipedia_verification.get('claims_verified', 0)
-            total_claims = wikipedia_verification.get('total_claims', 1)
-            claims_ratio = claims_verified / total_claims if total_claims > 0 else 0
+            # OPTION B: Extra penalty for low Tavily verification (REDUCED from 0.40 to 0.15) - Apply user weight multiplier
+            if tavily_score < 0.5 or tavily_coverage < 0.6:  # More lenient threshold (changed from 0.6/0.7 to 0.5/0.6)
+                base_contradiction_penalty = 0.15  # Reduced penalty for low verification (was 0.40)
+                contradiction_penalty = base_contradiction_penalty * tavily_weight  # Apply user-defined weight
+                logger.warning(f"TAVILY LOW VERIFICATION: +{contradiction_penalty:.2f} penalty (score: {tavily_score:.3f}, coverage: {tavily_coverage:.3f})")
             
-            # If high Tavily coverage but low claims verification, it might be contradictory
-            if claims_ratio < 0.7:  # Less than 70% of claims verified (more lenient, was 0.8)
-                contradiction_penalty += 0.15 * wikipedia_weight  # Reduced penalty (was 0.30)
-                logger.warning(f"TAVILY POTENTIAL CONTRADICTION: +{0.15 * wikipedia_weight:.2f} penalty (coverage: {wiki_coverage:.3f}, claims_ratio: {claims_ratio:.3f})")
+            # NEW: Check for Tavily contradictions (high coverage but potentially wrong facts)
+            if tavily_coverage >= 0.8 and tavily_score >= 0.7:  # High coverage and score
+                # Check if this might be a subtle fake news with wrong facts
+                claims_verified = tavily_verification.get('claims_verified', 0)
+                total_claims = tavily_verification.get('total_claims', 1)
+                claims_ratio = claims_verified / total_claims if total_claims > 0 else 0
+                
+                # If high Tavily coverage but low claims verification, it might be contradictory
+                if claims_ratio < 0.7:  # Less than 70% of claims verified (more lenient, was 0.8)
+                    contradiction_penalty += 0.15 * tavily_weight  # Reduced penalty (was 0.30)
+                    logger.warning(f"TAVILY POTENTIAL CONTRADICTION: +{0.15 * tavily_weight:.2f} penalty (coverage: {tavily_coverage:.3f}, claims_ratio: {claims_ratio:.3f})")
+                
+                # SPECIAL: Year contradiction detection for historical claims
+                # If text contains years and Tavily coverage is high, check for year contradictions
+                import re
+                years_in_text = re.findall(r'\b(18|19|20)\d{2}\b', text.lower())
+                if years_in_text and claims_ratio < 0.9:  # More lenient (was 1.0)
+                    contradiction_penalty += 0.15 * tavily_weight  # Reduced penalty (was 0.25)
+                    logger.warning(f"TAVILY YEAR CONTRADICTION DETECTED: +{0.15 * tavily_weight:.2f} penalty (years: {years_in_text}, claims_ratio: {claims_ratio:.3f})")
             
-            # SPECIAL: Year contradiction detection for historical claims
-            # If text contains years and Tavily coverage is high, check for year contradictions
-            import re
-            years_in_text = re.findall(r'\b(18|19|20)\d{2}\b', text.lower())
-            if years_in_text and claims_ratio < 0.9:  # More lenient (was 1.0)
-                contradiction_penalty += 0.15 * wikipedia_weight  # Reduced penalty (was 0.25)
-                logger.warning(f"TAVILY YEAR CONTRADICTION DETECTED: +{0.15 * wikipedia_weight:.2f} penalty (years: {years_in_text}, claims_ratio: {claims_ratio:.3f})")
+            # NEW: If verification is high (≥50%), boost credibility (more lenient, was 0.6)
+            verifier_display_name = tavily_verification.get('provider', self.verifier_type).title()
+            
+            if tavily_score >= 0.5:
+                # High verification significantly boosts credibility
+                tavily_boost = -0.30  # Increased boost (was -0.25)
+                logger.info(f"{verifier_display_name} HIGH VERIFICATION BOOST: -{abs(tavily_boost):.2f} (score: {tavily_score:.3f})")
+            elif tavily_coverage >= 0.75 and tavily_score >= 0.4:  # More lenient thresholds (was 0.85/0.5)
+                # High coverage also boosts credibility (but less than verification score)
+                tavily_boost = -0.15  # Increased boost (was -0.08)
+                logger.info(f"{verifier_display_name} HIGH COVERAGE BOOST: -{abs(tavily_boost):.2f} (coverage: {tavily_coverage:.3f}, score: {tavily_score:.3f})")
+            
+            logger.info(f"{verifier_display_name} adjustment: {tavily_adjustment:.3f}, contradiction penalty: {contradiction_penalty:.3f}, boost: {tavily_boost:.3f} (score: {tavily_score:.3f}, coverage: {tavily_coverage:.3f})")
         
-        # NEW: If verification is high (≥50%), boost credibility (more lenient, was 0.6)
-        verifier_display_name = wikipedia_verification.get('provider', self.verifier_type).title()
-        
-        if wiki_score >= 0.5:
-            # High verification significantly boosts credibility
-            wikipedia_boost = -0.30  # Increased boost (was -0.25)
-            logger.info(f"{verifier_display_name} HIGH VERIFICATION BOOST: -{abs(wikipedia_boost):.2f} (score: {wiki_score:.3f})")
-        elif wiki_coverage >= 0.75 and wiki_score >= 0.4:  # More lenient thresholds (was 0.85/0.5)
-            # High coverage also boosts credibility (but less than verification score)
-            wikipedia_boost = -0.15  # Increased boost (was -0.08)
-            logger.info(f"{verifier_display_name} HIGH COVERAGE BOOST: -{abs(wikipedia_boost):.2f} (coverage: {wiki_coverage:.3f}, score: {wiki_score:.3f})")
-        
-        logger.info(f"{verifier_display_name} adjustment: {wikipedia_adjustment:.3f}, contradiction penalty: {contradiction_penalty:.3f}, boost: {wikipedia_boost:.3f} (score: {wiki_score:.3f}, coverage: {wiki_coverage:.3f})")
-        
-        # Calculate final score with Wikipedia adjustments
-        final_fake_prob = min(1.0, max(0.0, base_fake_prob + consistency_adjustment + rhetorical_adjustment + wikipedia_adjustment + contradiction_penalty + wikipedia_boost))
+        # Calculate final score with Tavily adjustments
+        final_fake_prob = min(1.0, max(0.0, base_fake_prob + consistency_adjustment + rhetorical_adjustment + tavily_adjustment + contradiction_penalty + tavily_boost))
         
         # Generate explanation
         explanation = {
             'base_fusion_score': base_fake_prob,
             'consistency_adjustment': consistency_adjustment,
             'rhetorical_adjustment': rhetorical_adjustment,
-            'wikipedia_adjustment': wikipedia_adjustment,
-            'wikipedia_contradiction_penalty': contradiction_penalty,  # NEW: Extra penalty for very low Wikipedia verification
-            'wikipedia_boost': wikipedia_boost,
+            'wikipedia_adjustment': tavily_adjustment,  # Keep for backward compatibility
+            'tavily_adjustment': tavily_adjustment,
+            'wikipedia_contradiction_penalty': contradiction_penalty,  # Keep for backward compatibility
+            'tavily_contradiction_penalty': contradiction_penalty,
+            'wikipedia_boost': tavily_boost,  # Keep for backward compatibility
+            'tavily_boost': tavily_boost,
             'final_score': final_fake_prob,
             'confidence': fusion_result.get('confidence', 0.5),
             'key_factors': []
@@ -1323,28 +1347,36 @@ class ImprovedDetection:
         # Identify key factors
         if consistency_adjustment > 0.1:
             explanation['key_factors'].append('inconsistent_information')
-        if temporal_score < 0.5:  # NEW: Severe temporal inconsistency
+        if temporal_score < 0.5:  # Severe temporal inconsistency
             explanation['key_factors'].append('severe_temporal_error')
         if rhetorical_adjustment > 0.05:
             explanation['key_factors'].append('loaded_language')
-        if contradiction_penalty > 0.0:  # NEW: Extremely low verification
+        if contradiction_penalty > 0.0:  # Extremely low verification
             explanation['key_factors'].append(f'extremely_low_{self.verifier_type}_verification')
-        elif wikipedia_adjustment > 0.1:
+        elif tavily_adjustment > 0.1:
             explanation['key_factors'].append(f'low_{self.verifier_type}_verification')
-        if wikipedia_boost < -0.1:  # NEW: High verification
+        if tavily_boost < -0.1:  # High verification
             explanation['key_factors'].append(f'high_{self.verifier_type}_verification')
         if base_fake_prob > 0.7:
             explanation['key_factors'].append('baseline_detection')
         
-        # Add Wikipedia verification details to explanation
-        if wikipedia_verification:
-            explanation['wikipedia_details'] = {
-                'verification_score': wikipedia_verification.get('overall_score', 0.0),
-                'coverage': wikipedia_verification.get('wikipedia_coverage', 0.0),
-                'entities_found': wikipedia_verification.get('verification_summary', {}).get('entities_found', 0),
-                'entities_checked': wikipedia_verification.get('verification_summary', {}).get('total_entities_checked', 0),
-                'claims_verified': wikipedia_verification.get('verification_summary', {}).get('claims_verified', 0),
-                'claims_checked': wikipedia_verification.get('verification_summary', {}).get('total_claims_checked', 0)
+        # Add Tavily verification details to explanation
+        if tavily_verification:
+            explanation['wikipedia_details'] = {  # Keep for backward compatibility
+                'verification_score': tavily_verification.get('overall_score', 0.0),
+                'coverage': tavily_verification.get('tavily_coverage', tavily_verification.get('wikipedia_coverage', 0.0)),
+                'entities_found': tavily_verification.get('verification_summary', {}).get('entities_found', 0),
+                'entities_checked': tavily_verification.get('verification_summary', {}).get('total_entities_checked', 0),
+                'claims_verified': tavily_verification.get('verification_summary', {}).get('claims_verified', 0),
+                'claims_checked': tavily_verification.get('verification_summary', {}).get('total_claims_checked', 0)
+            }
+            explanation['tavily_details'] = {
+                'verification_score': tavily_verification.get('overall_score', 0.0),
+                'coverage': tavily_verification.get('tavily_coverage', tavily_verification.get('wikipedia_coverage', 0.0)),
+                'entities_found': tavily_verification.get('verification_summary', {}).get('entities_found', 0),
+                'entities_checked': tavily_verification.get('verification_summary', {}).get('total_entities_checked', 0),
+                'claims_verified': tavily_verification.get('verification_summary', {}).get('claims_verified', 0),
+                'claims_checked': tavily_verification.get('verification_summary', {}).get('total_claims_checked', 0)
             }
         
         return {

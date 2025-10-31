@@ -13,7 +13,8 @@ export interface DetectionResponse {
     confidence: number;
     explanation: any;
     detectgpt: any;
-    wikipedia_verification: any;
+    wikipedia_verification?: any;  // Keep for backward compatibility
+    tavily_verification?: any;  // Tavily verification
     key_factors: string[];
   };
   timestamp: string;
