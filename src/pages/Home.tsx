@@ -1,3 +1,4 @@
+import Footer from "@/components/Footer"
 import Guide from "@/components/Guide"
 import Hero from "@/components/Hero"
 import Product from "@/components/Product"
@@ -16,6 +17,7 @@ const Home = () => {
       <Product/>
       <Guide/>
       <Touch/>
+      <Footer/>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { Separator } from "@radix-ui/react-separator"
 import { BarChart3, FileSearch, Wand2 } from "lucide-react"
-import EarthCanvas from "./earth/earth"
+import EarthCanvas from "./earth/Earth"
 
 
 const Product = () => {
@@ -11,7 +11,7 @@ const Product = () => {
 
         </section>
 
-        <section className="grid gap-6 p-6 md:grid-cols-[1fr_2fr]">
+        <section className="grid gap-6 p-6 md:grid-cols-[1fr_2fr] md:min-h-screen">
             <div className="mx-2">
                 <Separator className="my-10 bg-white/20 h-[2px]" />
                 <div className="inline-flex items-center gap-2">
@@ -43,7 +43,7 @@ const Product = () => {
 
             </div>
 
-            <aside className="pb-24 lg:pb-32">
+            <aside className="flex items-center justify-center">
                 <div id="earth-box" className="relative w-full h-full overflow-hidden rounded-xl">
                     <EarthCanvas className="w-full h-full" />
                 </div>
