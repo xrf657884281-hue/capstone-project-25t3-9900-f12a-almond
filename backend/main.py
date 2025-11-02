@@ -691,6 +691,13 @@ async def generate_single(
             except Exception as e:
                 logger.warning(f"Failed to search news: {e}")
         
+        # Prepare request_dict for MongoDB storage (used in both branches)
+        request_dict = request.dict()
+        if style:
+            request_dict["style"] = style
+        if domain:
+            request_dict["domain"] = domain
+        
         # If we found a source URL, generate from real news with style and domain
         if source_url and source_text:
             logger.info(f"Generating from real news: {source_url} (style={style}, domain={domain})")
@@ -704,24 +711,24 @@ async def generate_single(
             })
         else:
             # Fallback to original generation method with style and domain
-            request_dict = request.dict()
-            if style:
-                request_dict["style"] = style
-            if domain:
-                request_dict["domain"] = domain
             result = service.generate_fake_news(request_dict)
+        
         # Write to MongoDB (best-effort)
         try:
             if mongo_service.is_connected():
+                # Ensure strategy is set (required by MongoDB validator)
+                strategy_value = request.strategy if request.strategy else "loaded_language"
                 mongo_service.insert_one("generation_results", {
                     "topic": request.topic,
-                    "strategy": request.strategy,
+                    "strategy": strategy_value,
                     "model_type": request.model_type,
                     "params": request_dict,
                     "result": result,
                     "created_at": datetime.utcnow().isoformat()
                 })
-        except Exception:
+                logger.info(f"Successfully saved generation result to MongoDB")
+        except Exception as e:
+            logger.error(f"Failed to save generation result to MongoDB: {e}")
             pass
 
         # activity log

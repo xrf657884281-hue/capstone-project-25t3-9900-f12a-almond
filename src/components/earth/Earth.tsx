@@ -34,7 +34,7 @@ const EarthCanvas: React.FC<EarthCanvasProps> = ({ className }) => {
     }
     renderer.setSize(sizes.width, sizes.height, false)
     renderer.setPixelRatio(sizes.pixelRatio)
-    renderer.setClearColor('#000011')
+    renderer.setClearColor(0x000000, 0)
 
     // ----- Scene & Camera -----
     const scene = new THREE.Scene()
@@ -124,7 +124,7 @@ const EarthCanvas: React.FC<EarthCanvasProps> = ({ className }) => {
 
     const debugSun = new THREE.Mesh(
       new THREE.IcosahedronGeometry(0.1, 2),
-      new THREE.MeshBasicMaterial({ color: 0xffffff }),
+      new THREE.MeshBasicMaterial({ color: 0xff8c00 }),
     )
     scene.add(debugSun)
 
