@@ -22,6 +22,11 @@ class Config:
     # OpenAI API Keys
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     
+    # News API Configuration
+    # Default API key hardcoded for public use (can be overridden by environment variable)
+    NEWS_API_KEY: Optional[str] = os.getenv("NEWS_API_KEY", "9dc4f9221b704bde9750032343c57b3c")
+    NEWS_API_BASE_URL: str = os.getenv("NEWS_API_BASE_URL", "https://newsapi.org/v2")
+    
     # Database Configuration
     # 优先使用完整连接串 MONGODB_URL，否则根据以下变量组装：
     # MONGODB_USER/MONGODB_PASSWORD/MONGODB_HOST/MONGODB_PORT/MONGODB_DATABASE

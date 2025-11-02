@@ -263,20 +263,38 @@ EXECUTION CHECKLIST:
 ✓ Include at least one direct quote from fake expert
 ✓ NO sensational language or obvious clickbait
 ✓ NO research disclaimers at the end
+✓ CRITICAL: Ensure logical coherence - all facts must connect and support a consistent narrative
+✓ All manipulated information must be internally consistent and believable
+
+LOGIC AND COHERENCE REQUIREMENTS:
+- Every claim should logically support the overall narrative
+- Statistics and data should align with the story's premise
+- Expert quotes should reinforce the main argument
+- Chronological and causal relationships must be consistent
+- No contradictory information within the article
 
 Write the complete article now following these requirements."""
 
+            # Adjust system prompt based on style for better consistency
+            enhanced_system_prompt = system_prompt
+            if style_key == "fun":
+                enhanced_system_prompt += " Use a playful, humorous tone while maintaining professional news structure. Include engaging wordplay and light-hearted expressions."
+            elif style_key == "sensational":
+                enhanced_system_prompt += " Use dramatic, emotionally impactful language while keeping it professional. Create urgency without obvious clickbait."
+            elif style_key == "formal":
+                enhanced_system_prompt += " Use formal, academic language with precise terminology. Maintain an authoritative, objective tone."
+            
             response = self.client.chat.completions.create(
                 model=model_type,
                 messages=[
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": enhanced_system_prompt},
                     {"role": "user", "content": full_prompt}
                 ],
-                max_tokens=600,
-                temperature=0.5,
-                top_p=0.8,
-                frequency_penalty=0.7,
-                presence_penalty=0.4
+                max_tokens=700,  # Increased for more coherent articles
+                temperature=0.6,  # Adjusted for better style adherence
+                top_p=0.85,
+                frequency_penalty=0.6,
+                presence_penalty=0.3
             )
             
             generated_text = response.choices[0].message.content.strip()
@@ -452,6 +470,27 @@ class GenerationService:
         style_instruction = self.fake_news_generator.styles.get(style_key, self.fake_news_generator.styles["normal"]) if style_key else self.fake_news_generator.styles["normal"]
         domain_instruction = self.fake_news_generator.domains.get(domain_key, "") if domain_key else ""
 
+        # Enhanced system prompt to enforce style consistency
+        style_enforcement = ""
+        if style_key == "formal":
+            style_enforcement = "\n- Use formal, academic language with precise terminology\n- Avoid casual expressions or slang\n- Maintain objective, authoritative tone throughout"
+        elif style_key == "sensational":
+            style_enforcement = "\n- Use emotionally charged but professional language\n- Include dramatic but believable phrasing\n- Create sense of urgency or concern without being obvious clickbait"
+        elif style_key == "fun":
+            style_enforcement = "\n- Use playful, engaging language\n- Include humor and light-hearted expressions\n- Maintain news structure while being entertaining\n- Use creative but professional wordplay"
+        elif style_key == "normal":
+            style_enforcement = "\n- Use natural, conversational news tone\n- Maintain balanced, everyday language\n- Sound like typical mainstream news reporting"
+
+        domain_enforcement = ""
+        if domain_key == "politics":
+            domain_enforcement = "\n- Focus on political entities, policies, and government actions\n- Include political terminology and institutional references\n- Reference relevant political figures, parties, or legislative processes"
+        elif domain_key == "business":
+            domain_enforcement = "\n- Emphasize economic data, market trends, and business metrics\n- Include financial terminology and market analysis\n- Reference companies, stocks, and economic indicators"
+        elif domain_key == "sports":
+            domain_enforcement = "\n- Focus on athletic performance, competitions, and sports events\n- Use sports-specific terminology and statistics\n- Reference teams, leagues, and sporting achievements"
+        elif domain_key == "technology":
+            domain_enforcement = "\n- Highlight technological innovations, digital trends, and tech products\n- Use technology terminology and industry jargon\n- Reference tech companies, platforms, and digital developments"
+
         user_prompt = f"""You are given a REAL news article. Write a new PROFESSIONAL article that looks real but contains FALSE or MANIPULATED information relative to the source.
 
 SOURCE ARTICLE (verbatim):
@@ -466,16 +505,35 @@ TASK:
 - Do NOT copy sentences; paraphrase professionally.
 - Include one dateline and a varied professional headline.
 - At the end, include a single line: "Original report: {source_url}" if a URL is provided.
+- CRITICAL: The generated article MUST be logically coherent and factually consistent within itself (even though false relative to source).
+- Ensure all manipulated facts connect logically and support the overall narrative.
+- Maintain professional journalistic structure (headline, dateline, lead, body paragraphs, quotes).
 
-GUIDANCE:
+STYLE REQUIREMENTS (STRICTLY FOLLOW):
 {style_instruction}
+{style_enforcement}
+
+DOMAIN REQUIREMENTS (STRICTLY FOLLOW):
 {domain_instruction}
+{domain_enforcement}
+
+ADDITIONAL GUIDANCE:
 {label_instruction}
+
+IMPORTANT: The article must be COHERENT and LOGICAL. All false information must fit together naturally and support a consistent narrative. Maintain professional quality throughout.
 
 Write the complete manipulated article now about: {inferred_topic}."""
 
         try:
-            system_prompt = "You write professional news that intentionally manipulates a given real article to create credible-looking misinformation for research. Maintain newsroom style while altering facts."
+            # Enhanced system prompt based on style
+            if style_key == "fun":
+                system_prompt = "You write professional news articles with a playful, humorous tone that intentionally manipulates a given real article to create credible-looking misinformation for research. Maintain newsroom structure while adding entertaining elements and altering facts."
+            elif style_key == "sensational":
+                system_prompt = "You write professional news articles with dramatic, emotionally engaging language that intentionally manipulates a given real article to create credible-looking misinformation for research. Use impactful phrasing while maintaining journalistic structure."
+            elif style_key == "formal":
+                system_prompt = "You write professional news articles with a formal, authoritative tone that intentionally manipulates a given real article to create credible-looking misinformation for research. Use precise, academic language while maintaining newsroom structure."
+            else:
+                system_prompt = "You write professional news that intentionally manipulates a given real article to create credible-looking misinformation for research. Maintain newsroom style while altering facts with natural, everyday language."
 
             response = self.fake_news_generator.client.chat.completions.create(
                 model=model_type,
@@ -483,11 +541,11 @@ Write the complete manipulated article now about: {inferred_topic}."""
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                max_tokens=700,
-                temperature=0.5,
-                top_p=0.8,
-                frequency_penalty=0.7,
-                presence_penalty=0.4
+                max_tokens=800,  # Increased for more coherent articles
+                temperature=0.6,  # Slightly increased for style variation
+                top_p=0.85,
+                frequency_penalty=0.6,
+                presence_penalty=0.3
             )
 
             generated_text = response.choices[0].message.content.strip()

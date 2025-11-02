@@ -41,6 +41,7 @@ except Exception:
 # Import custom modules
 from config import Config
 from services.mongo_service import mongo_service
+from services.news_service import NewsService
 
 # Configure logging
 logging.basicConfig(
@@ -155,6 +156,9 @@ def get_generation_service():
         from services.generation_service import GenerationService
         generation_service = GenerationService()
     return generation_service
+
+def get_news_service():
+    return NewsService()
 
 # API routes
 @app.on_event("startup")
@@ -532,14 +536,180 @@ async def improved_detection_endpoint(
 async def generate_single(
     request: GenerationRequest,
     service: Any = Depends(get_generation_service),
+    news_service: Any = Depends(get_news_service),
     http_request: Request = None
 ):
-    """Generate single fake news sample"""
+    """Generate single fake news sample - automatically searches for real news and generates based on it"""
     try:
         logger.info(f"Generation request for topic: {request.topic}")
         
-        request_dict = request.dict()
-        result = service.generate_fake_news(request_dict)
+        # Extract style, domain, and actual topic from the prompt
+        # Format: "Write a {topic} news article in a {tone} tone about: {baseTopic}"
+        topic_text = request.topic
+        prompt_lower = topic_text.lower()
+        
+        # Parse style/tone from prompt - more precise matching
+        style = None
+        # Direct matching for tones
+        if "in a formal tone" in prompt_lower or "formal —" in prompt_lower:
+            style = "formal"
+        elif "in a sensational tone" in prompt_lower or "sensational —" in prompt_lower:
+            style = "sensational"
+        elif "in a fun tone" in prompt_lower or "fun —" in prompt_lower:
+            style = "fun"
+        elif "in a normal tone" in prompt_lower or "normal —" in prompt_lower:
+            style = "normal"
+        else:
+            # Fallback keyword matching
+            tone_patterns = {
+                "formal": ["formal", "professional", "neutral", "authoritative"],
+                "sensational": ["sensational", "dramatic", "emotional"],
+                "fun": ["fun", "playful", "humorous", "light-hearted"],
+                "normal": ["normal", "natural", "everyday"]
+            }
+            for style_key, keywords in tone_patterns.items():
+                if any(kw in prompt_lower for kw in keywords):
+                    style = style_key
+                    break
+        
+        # Parse domain/topic from prompt - more precise matching
+        domain = None
+        # Direct matching for topics
+        if "write a politics" in prompt_lower or "politics —" in prompt_lower:
+            domain = "politics"
+        elif "write a business" in prompt_lower or "business —" in prompt_lower:
+            domain = "business"
+        elif "write a sports" in prompt_lower or "sports —" in prompt_lower:
+            domain = "sports"
+        elif "write a technology" in prompt_lower or "technology —" in prompt_lower:
+            domain = "technology"
+        elif "write a general" in prompt_lower or "general —" in prompt_lower:
+            domain = None  # General means no specific domain
+        else:
+            # Fallback keyword matching
+            domain_patterns = {
+                "politics": ["politics", "political", "government", "election"],
+                "business": ["business", "market", "economic", "company"],
+                "sports": ["sports", "sport", "athlete", "game"],
+                "technology": ["technology", "tech", "digital", "innovation"]
+            }
+            for domain_key, keywords in domain_patterns.items():
+                if any(kw in prompt_lower for kw in keywords):
+                    domain = domain_key
+                    break
+        
+        # Extract the actual search query from the prompt
+        if "about: " in topic_text:
+            topic_text = topic_text.split("about: ")[-1].strip()
+        else:
+            # Try to extract from other patterns
+            import re
+            match = re.search(r"about\s*:\s*(.+)$", topic_text, re.IGNORECASE)
+            if match:
+                topic_text = match.group(1).strip()
+        
+        # Check if topic looks like a URL
+        is_url = False
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(topic_text)
+            is_url = bool(parsed.scheme and parsed.netloc)
+        except:
+            pass
+        
+        source_url = None
+        source_text = None
+        
+        if is_url:
+            # If input is a URL, fetch content from it
+            try:
+                import urllib.request
+                import re
+                import html
+                req = urllib.request.Request(topic_text, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    raw = resp.read()
+                text = raw.decode("utf-8", errors="ignore")
+                text = re.sub(r"<script[\s\S]*?</script>", " ", text, flags=re.IGNORECASE)
+                text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.IGNORECASE)
+                article_match = re.search(r"<article[\s\S]*?</article>", text, flags=re.IGNORECASE)
+                candidate = article_match.group(0) if article_match else text
+                paragraphs = re.findall(r"<p[^>]*>([\s\S]*?)</p>", candidate, flags=re.IGNORECASE)
+                cleaned = []
+                for p in paragraphs[:20]:
+                    p_txt = re.sub(r"<[^>]+>", " ", p)
+                    p_txt = html.unescape(p_txt)
+                    p_txt = re.sub(r"\s+", " ", p_txt).strip()
+                    if p_txt:
+                        cleaned.append(p_txt)
+                source_text = "\n\n".join(cleaned)
+                source_url = topic_text
+                if not source_text:
+                    source_text = "Article content unavailable"
+            except Exception as e:
+                logger.warning(f"Failed to fetch content from URL: {e}")
+                source_text = "Article content unavailable"
+                source_url = topic_text
+        else:
+            # Search for real news articles using News API
+            try:
+                news = news_service.search_news(query=topic_text, language="en", page_size=3)
+                articles = (news or {}).get("articles") or []
+                
+                if articles and articles[0].get("url"):
+                    article = articles[0]
+                    source_url = article.get("url", "")
+                    title = article.get("title", "")
+                    desc = article.get("description", "")
+                    source_text = (title + "\n\n" + desc).strip()
+                    
+                    # Try to fetch full content
+                    try:
+                        import urllib.request
+                        import re
+                        import html
+                        req = urllib.request.Request(source_url, headers={"User-Agent": "Mozilla/5.0"})
+                        with urllib.request.urlopen(req, timeout=8) as resp:
+                            raw = resp.read()
+                        text = raw.decode("utf-8", errors="ignore")
+                        text = re.sub(r"<script[\s\S]*?</script>", " ", text, flags=re.IGNORECASE)
+                        text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.IGNORECASE)
+                        article_match = re.search(r"<article[\s\S]*?</article>", text, flags=re.IGNORECASE)
+                        candidate = article_match.group(0) if article_match else text
+                        paragraphs = re.findall(r"<p[^>]*>([\s\S]*?)</p>", candidate, flags=re.IGNORECASE)
+                        cleaned = []
+                        for p in paragraphs[:20]:
+                            p_txt = re.sub(r"<[^>]+>", " ", p)
+                            p_txt = html.unescape(p_txt)
+                            p_txt = re.sub(r"\s+", " ", p_txt).strip()
+                            if p_txt:
+                                cleaned.append(p_txt)
+                        if cleaned:
+                            source_text = "\n\n".join(cleaned)
+                    except Exception:
+                        pass  # Use title + description if full content fetch fails
+            except Exception as e:
+                logger.warning(f"Failed to search news: {e}")
+        
+        # If we found a source URL, generate from real news with style and domain
+        if source_url and source_text:
+            logger.info(f"Generating from real news: {source_url} (style={style}, domain={domain})")
+            result = service.generate_from_real({
+                "source_text": source_text,
+                "source_url": source_url,
+                "strategy": "loaded_language",
+                "model_type": "gpt-4o",
+                "style": style,
+                "domain": domain
+            })
+        else:
+            # Fallback to original generation method with style and domain
+            request_dict = request.dict()
+            if style:
+                request_dict["style"] = style
+            if domain:
+                request_dict["domain"] = domain
+            result = service.generate_fake_news(request_dict)
         # Write to MongoDB (best-effort)
         try:
             if mongo_service.is_connected():
