@@ -97,12 +97,45 @@ class VisionService:
         except Exception as e:
             logger.error(f"Error preparing image data: {e}")
             return None
+
+    def _to_concise_paragraph(self, text: str, max_chars: Optional[int] = 120) -> str:
+        """Convert any markdown/list output to a single concise paragraph.
+
+        Rules:
+        - remove headings, numbering, bullets, bold markers
+        - collapse newlines to spaces
+        - trim to max_chars without cutting in the middle of multibyte characters
+        """
+        try:
+            import re
+            cleaned = text
+            # remove markdown bold and inline code markers
+            cleaned = re.sub(r"\*\*(.*?)\*\*", r"\1", cleaned)
+            cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
+            # remove leading list numbers like "1.", "2)", "-", "*"
+            cleaned = re.sub(r"(?m)^\s*(?:[-*•]\s+|\d+\s*[\.)]\s+)", "", cleaned)
+            # remove section titles like "主要场景描述："
+            cleaned = re.sub(r"(?m)^\s*[^：:\n]{1,20}[：:]\s*", "", cleaned)
+            # collapse multiple spaces/newlines
+            cleaned = re.sub(r"\s+", " ", cleaned).strip()
+            # truncate when positive limit provided
+            if isinstance(max_chars, int) and max_chars and max_chars > 0 and len(cleaned) > max_chars:
+                cleaned = cleaned[:max_chars].rstrip()
+            return cleaned
+        except Exception:
+            # fallback to raw slice
+            text = (text or "").strip()
+            if isinstance(max_chars, int) and max_chars and max_chars > 0:
+                return text[:max_chars].rstrip()
+            return text
     
     def describe_image(
         self, 
         image_url_or_b64: str,
         detail_level: str = "high",
-        additional_prompt: Optional[str] = None
+        additional_prompt: Optional[str] = None,
+        output_mode: Optional[str] = "detailed",  # "detailed" | "concise"
+        max_chars: Optional[int] = 2000
     ) -> Dict[str, Any]:
         """
         Analyze and describe image content using GPT-4 Vision
@@ -144,16 +177,25 @@ class VisionService:
             }
         
         # Build prompt for image analysis
-        base_prompt = """请详细分析这张图片，包括以下内容：
-1. **主要场景描述**：图片中正在发生什么？
-2. **人物信息**：如果有人物，描述他们的身份、外貌特征、动作、表情等
-3. **地点信息**：识别地点类型（室内/室外）、具体位置特征、环境细节
-4. **动作和活动**：描述正在进行的动作或活动
-5. **物体和元素**：识别图片中的主要物体、标志、文字等
-6. **时间和氛围**：推断可能的时间、天气、氛围等
-7. **整体印象**：总结图片传达的主要信息
-
-请用中文回答，提供详细、准确的描述。如果某些信息无法确定，请说明。"""
+        if (output_mode or "detailed") == "concise":
+            # 新闻导语式、可直接用于生成/检测的简洁段落
+            base_prompt = (
+                "请基于图片内容输出一段英文新闻导语，要求：\n"
+                "- 只输出一段连续文本，不要编号/小标题/项目符号；\n"
+                "- 不要猜测具体人物真实身份；如有可见地名/文字（如“Sydney”等）可自然融入；\n"
+                "- 聚焦可观测事实：地点/活动/装扮/氛围；\n"
+                f"- 字数不超过{max_chars or 120}字，语气自然客观。\n"
+                "如果图片无法判断某些信息，请省略而非虚构。"
+            )
+        else:
+            base_prompt = (
+                "请基于图片内容输出一段英文新闻导语，要求：\n"
+                "- 只输出一段连续文本，不要编号/小标题/项目符号；\n"
+                "- 不要猜测具体人物真实身份；如有可见地名/文字（如“Sydney”等）可自然融入；\n"
+                "- 聚焦可观测事实：地点/活动/装扮/氛围；\n"
+                f"- 字数不超过{max_chars or 120}字，语气自然客观。\n"
+                "如果图片无法判断某些信息，请省略而非虚构。"
+            )
         
         if additional_prompt:
             base_prompt += f"\n\n额外要求：{additional_prompt}"
@@ -184,6 +226,10 @@ class VisionService:
             )
             
             description_text = response.choices[0].message.content.strip()
+            if (output_mode or "detailed") == "concise":
+                # if max_chars <= 0 or None -> no truncation
+                limit = None if (max_chars is None or (isinstance(max_chars, int) and max_chars <= 0)) else int(max_chars)
+                description_text = self._to_concise_paragraph(description_text, limit)
             
             # Extract structured information (optional: parse the response for structured data)
             structured_info = self._parse_description(description_text)

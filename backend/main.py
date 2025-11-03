@@ -132,6 +132,14 @@ class UpdateAvatarRequest(BaseModel):
     username_or_email: Optional[str] = None
     avatar_url_or_b64: str
 
+# ============ Vision describe models ============
+class VisionDescribeRequest(BaseModel):
+    image_url_or_b64: str
+    detail_level: Optional[str] = "high"  # "low" | "high" | "auto"
+    additional_prompt: Optional[str] = None
+    output_mode: Optional[str] = "detailed"  # "detailed" | "concise"
+    max_chars: Optional[int] = None  # None or <=0 表示不截断
+
 # Dependency injection  
 def get_detection_service():
     global detection_service
@@ -253,6 +261,47 @@ async def health_check():
             "mongodb": mongo_service.is_connected()
         }
     }
+
+# ============ Vision endpoints ============
+@app.post("/api/vision/describe")
+async def vision_describe(
+    body: VisionDescribeRequest,
+    vision: Any = Depends(get_vision_service),
+    http_request: Request = None
+):
+    try:
+        res = vision.describe_image(
+            image_url_or_b64=body.image_url_or_b64,
+            detail_level=body.detail_level or "high",
+            additional_prompt=body.additional_prompt,
+            output_mode=body.output_mode or "detailed",
+            max_chars=(body.max_chars if (body.max_chars is not None) else None)
+        )
+        # activity log (best-effort)
+        try:
+            if mongo_service.is_connected():
+                mongo_service.insert_one("user_activity_log", {
+                    "action": "vision_describe",
+                    "user": {},
+                    "request_meta": {
+                        "image_provided": bool(body.image_url_or_b64),
+                        "image_url_or_b64": body.image_url_or_b64,
+                        "detail_level": body.detail_level or "high"
+                    },
+                    "result_meta": {
+                        "ok": bool(res.get("success")),
+                        "error": res.get("error")
+                    },
+                    "client": _client_info(http_request),
+                    "created_at": datetime.utcnow().isoformat()
+                })
+        except Exception:
+            pass
+
+        return res
+    except Exception as e:
+        logger.error(f"Vision describe error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/db/health")
 async def db_health():
