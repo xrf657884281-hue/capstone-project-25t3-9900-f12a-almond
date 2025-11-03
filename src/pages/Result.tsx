@@ -4,17 +4,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { HighlightedText } from "@/components/HighlightedText";
 
 type Analysis = {
-  isFake?: boolean;              
-  verdict?: string;             
-  aiConfidence?: number;      
-  humanConfidence?: number;   
-  readability?: number;       
-  mostAISentences?: string[];  
+  isFake?: boolean;
+  verdict?: string;
+  aiConfidence?: number;
+  humanConfidence?: number;
+  readability?: number;
+  mostAISentences?: string[];
   notes?: string;
-  confidence?: number;           // Backend confidence score
-  fake_probability?: number;     // Backend fake probability
-  explanation?: string;          // Backend explanation
-  details?: any;                 // Backend details object
+  confidence?: number;
+  fake_probability?: number;
+  explanation?: string;
+  details?: any;
 };
 
 const clamp01 = (v: number | undefined) => {
@@ -43,7 +43,7 @@ const Result = () => {
   const text = state?.text ?? "";
   const analysis = state?.analysis ?? {};
 
-  // FAKE/TRUE
+  // FAKE / TRUE
   const verdict: "FAKE" | "TRUE" | "" =
     typeof analysis.isFake === "boolean"
       ? analysis.isFake
@@ -64,53 +64,58 @@ const Result = () => {
   };
 
   const handleBack = () => {
-    if (state?.source === "detection") navigate("/detection");
-    else if (state?.source === "generate") navigate("/generate");
-    else navigate("/profile");
+    navigate("/profile");
   };
 
   return (
     <div className="min-h-screen px-6 py-10 bg-background text-foreground">
       <div className="mx-auto w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7 space-y-4">
-          <h1 className="text-2xl font-bold">Result</h1>
+          <h1 className="text-2xl font-bold text-center mb-4">Result</h1>
 
-          <Card className="border border-border">
+          <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-muted-foreground">
-                  {state?.source ? `Source: ${state.source}` : "Preview of the content"}
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={handleCopy}>Copy</Button>
-                  <Button variant="outline" onClick={handleBack}>Back</Button>
-                </div>
+              <div className="flex justify-end mb-3 gap-2">
+                <Button variant="outline" onClick={handleCopy} className="border border-gray-300 dark:border-border shadow">
+                  Copy
+                </Button>
+                <Button variant="outline" onClick={handleBack} className="border border-gray-300 dark:border-border shadow">
+                  Back to Profile
+                </Button>
               </div>
-              
-              {/* 错误高亮提示 */}
-              {(analysis.readability ?? 0) > 0 && 
-               analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning && 
-               analysis.details.baseline_results.text_detection.detectgpt.reasoning.length > 0 && (
-                <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
-                  <p className="text-xs text-yellow-800">
-                    Detected errors are highlighted in red, hover to view detailed error information
-                  </p>
-                </div>
-              )}
+
+              {(analysis.readability ?? 0) > 0 &&
+                analysis.details?.baseline_results?.text_detection?.detectgpt
+                  ?.reasoning &&
+                analysis.details.baseline_results.text_detection.detectgpt.reasoning
+                  .length > 0 && (
+                  <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-xs text-yellow-800">
+                      Detected errors are highlighted in red, hover to view detailed
+                      error information.
+                    </p>
+                  </div>
+                )}
 
               {text ? (
-                <div className="rounded-md border p-4 bg-card text-card-foreground max-h-[60vh] overflow-auto">
+                <div className="rounded-md border border-gray-300 dark:border-border bg-gray-50 dark:bg-card p-4 text-card-foreground max-h-[60vh] overflow-auto">
                   <div className="text-sm">
-                    <HighlightedText 
+                    <HighlightedText
                       text={text}
-                      errors={(analysis.readability ?? 0) > 0 ? (analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning || []) : []}
+                      errors={
+                        (analysis.readability ?? 0) > 0
+                          ? analysis.details?.baseline_results?.text_detection
+                              ?.detectgpt?.reasoning || []
+                          : []
+                      }
                       className="text-sm"
                     />
                   </div>
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  No content provided. Please go back and run a scan or generate something first.
+                  No content provided. Please go back and run a scan or generate
+                  something first.
                 </div>
               )}
             </CardContent>
@@ -118,10 +123,8 @@ const Result = () => {
         </div>
 
         <div className="lg:col-span-5 space-y-4">
-          <h2 className="text-lg font-semibold">Basic scan</h2>
-
-          {/* Detection Result */}
-          <Card className="border border-border">
+          <h2 className="text-lg font-semibold">Basic Scan</h2>
+          <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Detection Result</span>
@@ -130,8 +133,8 @@ const Result = () => {
                     className={
                       "px-2 py-1 rounded text-xs font-semibold border " +
                       (verdict === "FAKE" && (analysis.readability ?? 0) > 0
-                        ? "bg-red-100 text-red-800 border-red-200"
-                        : "bg-green-100 text-green-800 border-green-200")
+                        ? "bg-red-100 text-red-800 border-red-300"
+                        : "bg-green-100 text-green-800 border-green-300")
                     }
                   >
                     {verdict}
@@ -164,122 +167,172 @@ const Result = () => {
               <Progress value={analysis.readability} />
             </CardContent>
           </Card>
-
-          {/* Analysis */}
-          <Card className="border border-border">
+          <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-4 space-y-4">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-sm">🤖 Analysis</h3>
-                {analysis.details?.baseline_results?.text_detection?.detectgpt?.verdict && (
-                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                {analysis.details?.baseline_results?.text_detection?.detectgpt
+                  ?.verdict && (
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300">
                     {analysis.details.baseline_results.text_detection.detectgpt.verdict.toUpperCase()}
                   </span>
                 )}
               </div>
 
-              {/* GPT Analysis - DetectGPT Reasoning */}
-              {analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning && (
+              {analysis.details?.baseline_results?.text_detection?.detectgpt
+                ?.reasoning && (
                 <div className="space-y-2">
-                  {analysis.details.baseline_results.text_detection.detectgpt.reasoning.map((reason: string, i: number) => {
-                    // Try to extract title and content
-                    const titleMatch = reason.match(/\*\*(.*?)\*\*/);
-                    if (titleMatch) {
-                      const title = titleMatch[1];
-                      let content = reason.replace(/\*\*(.*?)\*\*/, '').trim();
-                      // Remove leading colon and spaces if content starts with colon
-                      content = content.replace(/^:\s*/, '');
+                  {analysis.details.baseline_results.text_detection.detectgpt.reasoning.map(
+                    (reason: string, i: number) => {
+                      const titleMatch = reason.match(/\*\*(.*?)\*\*/);
+                      if (titleMatch) {
+                        const title = titleMatch[1];
+                        let content = reason
+                          .replace(/\*\*(.*?)\*\*/, "")
+                          .trim();
+                        content = content.replace(/^:\s*/, "");
+                        return (
+                          <div
+                            key={i}
+                            className="text-sm bg-blue-50 rounded-md border border-blue-300 p-3"
+                          >
+                            <p className="text-gray-700">
+                              <span className="font-bold text-gray-800">
+                                {title}:
+                              </span>{" "}
+                              {content}
+                            </p>
+                          </div>
+                        );
+                      }
                       return (
-                        <div key={i} className="text-sm bg-blue-50 rounded-md border border-blue-200 p-3">
-                          <p className="text-gray-700"><span className="font-bold text-gray-800">{title}:</span> {content}</p>
+                        <div
+                          key={i}
+                          className="text-sm bg-blue-50 rounded-md border border-blue-300 p-3"
+                        >
+                          <p className="text-gray-700">{reason}</p>
                         </div>
                       );
                     }
-                    return (
-                      <div key={i} className="text-sm bg-blue-50 rounded-md border border-blue-200 p-3">
-                        <p className="text-gray-700">{reason}</p>
+                  )}
+                </div>
+              )}
+
+              {Array.isArray(analysis.mostAISentences) &&
+                analysis.mostAISentences.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                      Key Factors
+                    </h4>
+                    {analysis.mostAISentences.map((s, i) => (
+                      <div
+                        key={i}
+                        className="text-sm bg-gray-50 rounded-md border border-gray-300 p-2"
+                      >
+                        <strong>{s}</strong>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
 
-              {/* Key Factors */}
-              {Array.isArray(analysis.mostAISentences) && analysis.mostAISentences.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide">Key Factors</h4>
-                  {analysis.mostAISentences.map((s, i) => (
-                    <div key={i} className="text-sm bg-muted/70 rounded-md border p-2">
-                      <strong>{s}</strong>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Model Info */}
               {analysis.details?.baseline_results?.text_detection?.detectgpt && (
-                <div className="pt-3 border-t border-gray-200">
+                <div className="pt-3 border-t border-gray-300">
                   <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>Model: {analysis.details.baseline_results.text_detection.detectgpt.model}</span>
-                    <span>Confidence: {(analysis.details.baseline_results.text_detection.detectgpt.confidence * 100).toFixed(0)}%</span>
+                    <span>
+                      Model:{" "}
+                      {
+                        analysis.details.baseline_results.text_detection
+                          .detectgpt.model
+                      }
+                    </span>
+                    <span>
+                      Confidence:{" "}
+                      {(
+                        analysis.details.baseline_results.text_detection.detectgpt
+                          .confidence * 100
+                      ).toFixed(0)}
+                      %
+                    </span>
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Tavily Fact Verification */}
-          {(analysis.details?.tavily_verification || analysis.details?.wikipedia_verification) && (
-            <Card className="border border-border">
+          {/* Fact Verification */}
+          {(analysis.details?.tavily_verification ||
+            analysis.details?.wikipedia_verification) && (
+            <Card className="border border-gray-300 dark:border-border shadow">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <h3 className="font-semibold text-sm">🔍 Fact Verification</h3>
-                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-300">
                     TAVILY
                   </span>
                 </div>
                 <div className="space-y-2">
                   {(() => {
-                    const verification = analysis.details?.tavily_verification || analysis.details?.wikipedia_verification;
-                    const coverage = verification?.tavily_coverage || verification?.wikipedia_coverage || 0;
+                    const verification =
+                      analysis.details?.tavily_verification ||
+                      analysis.details?.wikipedia_verification;
+                    const coverage =
+                      verification?.tavily_coverage ||
+                      verification?.wikipedia_coverage ||
+                      0;
                     const score = verification?.overall_score || 0;
                     const entitiesFound = verification?.entities_found || 0;
                     const entitiesChecked = verification?.entities_checked || 1;
-                    
+
                     return (
                       <>
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600">Verification Score</span>
-                          <span className={`font-semibold ${
-                            (score * 100) < 30 
-                              ? 'text-red-600' 
-                              : (score * 100) < 60 
-                              ? 'text-yellow-600' 
-                              : 'text-green-600'
-                          }`}>
+                          <span className="text-gray-600">
+                            Verification Score
+                          </span>
+                          <span
+                            className={`font-semibold ${
+                              score * 100 < 30
+                                ? "text-red-600"
+                                : score * 100 < 60
+                                ? "text-yellow-600"
+                                : "text-green-600"
+                            }`}
+                          >
                             {(score * 100).toFixed(1)}%
                           </span>
                         </div>
                         <Progress value={score * 100} />
-                        
+
                         <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-                          <div className="bg-gray-50 rounded p-2">
-                            <div className="text-gray-500 mb-1 font-bold">Coverage</div>
-                            <div className="font-semibold text-lg mb-1">{(coverage * 100).toFixed(0)}%</div>
+                          <div className="bg-gray-50 rounded p-2 border border-gray-300">
+                            <div className="text-gray-500 mb-1 font-bold">
+                              Coverage
+                            </div>
+                            <div className="font-semibold text-lg mb-1">
+                              {(coverage * 100).toFixed(0)}%
+                            </div>
                             <div className="text-gray-400 text-[10px]">
-                              {coverage >= 0.8 
-                                ? '✅ High coverage' 
-                                : coverage >= 0.5 
-                                ? '⚠️ Moderate coverage' 
-                                : '❌ Low coverage'}
+                              {coverage >= 0.8
+                                ? "✅ High coverage"
+                                : coverage >= 0.5
+                                ? "⚠️ Moderate coverage"
+                                : "❌ Low coverage"}
                             </div>
                           </div>
-                          <div className="bg-gray-50 rounded p-2">
-                            <div className="text-gray-500 mb-1 font-bold">Entities Found</div>
-                            <div className="font-semibold text-lg mb-1">{entitiesFound}/{entitiesChecked}</div>
+                          <div className="bg-gray-50 rounded p-2 border border-gray-300">
+                            <div className="text-gray-500 mb-1 font-bold">
+                              Entities Found
+                            </div>
+                            <div className="font-semibold text-lg mb-1">
+                              {entitiesFound}/{entitiesChecked}
+                            </div>
                             <div className="text-gray-400 text-[10px]">
-                              {entitiesChecked > 0 
-                                ? `${((entitiesFound / entitiesChecked) * 100).toFixed(0)}% verified` 
-                                : 'No entities checked'}
+                              {entitiesChecked > 0
+                                ? `${(
+                                    (entitiesFound / entitiesChecked) *
+                                    100
+                                  ).toFixed(0)}% verified`
+                                : "No entities checked"}
                             </div>
                           </div>
                         </div>
