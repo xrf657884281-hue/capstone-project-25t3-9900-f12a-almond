@@ -3,16 +3,20 @@ import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { apiService } from "@/services/api"; 
+import { apiService } from "@/services/api";
 
 const MAX_LEN = 10000;
 
 const Detection = () => {
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
   const [text, setText] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>("");
+  const [visionText, setVisionText] = useState("");
   const [url, setUrl] = useState("");
+  const [image, setImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+  const [isVisionLoading, setIsVisionLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -25,18 +29,53 @@ const Detection = () => {
     setText(v.slice(0, MAX_LEN));
   };
 
-  const handleUpload = async (file?: File | null) => {
+  const handleUpload = (file?: File | null) => {
     if (!file) return;
+    setImage(file);
     setFileName(file.name);
-    if (file.type && file.type !== "text/plain") {
-      setError("Only .txt files are supported for upload.");
+    setVisionText("");
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
+    console.log("Selected image:", file);
+  };
+
+  const triggerFileDialog = () => inputRef.current?.click();
+
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleDescribe = async () => {
+    if (!image) {
+      setError("Please upload an image first.");
       return;
     }
+    setIsVisionLoading(true);
+    setError(null);
     try {
-      const content = await file.text();
-      onTextChange(content);
-    } catch {
-      setError("Failed to read file.");
+      const base64 = await fileToBase64(image);
+      const res = await apiService.visionDescribe({
+        image_url_or_b64: base64,
+        detail_level: "high",
+        output_mode: "detailed",
+      });
+
+      if (res.success && res.description) {
+        setVisionText(res.description);
+      } else {
+        setError(res.error || "Failed to describe image.");
+      }
+    } catch (err) {
+      console.error("Vision describe error:", err);
+      setError(
+        `Vision failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    } finally {
+      setIsVisionLoading(false);
     }
   };
 
@@ -51,23 +90,27 @@ const Detection = () => {
       const html = await res.text();
       const stripped = html.replace(/<[^>]*>?/gm, "").slice(0, MAX_LEN);
       onTextChange(stripped);
-    } catch (err) {
+    } catch {
       setError("Failed to fetch content from URL.");
     }
   };
 
   const handleScan = async () => {
-    if (!text.trim()) {
-      setError("Please paste, upload, or fetch some text first.");
+    const contentToDetect = visionText.trim()
+      ? visionText.trim()
+      : text.trim();
+
+    if (!contentToDetect) {
+      setError("Please enter text or describe an image first.");
       return;
     }
+
     setError(null);
     setIsLoading(true);
-
     try {
       const result = await apiService.detectImproved({
-        text: text.trim(),
-        use_improved_detection: true
+        text: contentToDetect,
+        use_improved_detection: true,
       });
 
       if (result.success) {
@@ -98,7 +141,7 @@ const Detection = () => {
         navigate("/result", {
           state: {
             source: "detection",
-            text: text.trim(),
+            text: contentToDetect,
             analysis: analysis,
           },
         });
@@ -119,13 +162,14 @@ const Detection = () => {
 
   const handleClear = () => {
     setText("");
-    setError(null);
+    setVisionText("");
+    setImage(null);
+    setImagePreview(null);
     setFileName("");
     setUrl("");
+    setError(null);
     if (inputRef.current) inputRef.current.value = "";
   };
-
-  const triggerFileDialog = () => inputRef.current?.click();
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row items-start justify-center gap-8 px-6 py-12 bg-background text-foreground">
@@ -136,16 +180,16 @@ const Detection = () => {
         className="flex-1 max-w-xl"
       >
         <h1 className="text-4xl font-bold mb-6 leading-snug">
-          AI Text Detection
+          AI Content Detection
         </h1>
         <p className="text-lg text-muted-foreground mb-4">
-          Paste, upload, or fetch text from a URL and we'll run{" "}
-          <strong>AI-generated content detection</strong> on it.
+          Detect AI-generated content from text or image.  
+          (Webpage detection via URL will be available soon.)
         </p>
         <ul className="list-disc pl-5 text-muted-foreground space-y-2">
-          <li>Supports direct pasting, uploading <code>.txt</code> files, or fetching from URLs.</li>
-          <li>A maximum of {MAX_LEN.toLocaleString()} characters per entry.</li>
-          <li>Works seamlessly with the “Generate → Detect” workflow.</li>
+          <li>Supports text or image detection.</li>
+          <li>Image analysis uses the same model as generator.</li>
+          <li>Maximum {MAX_LEN.toLocaleString()} characters per entry.</li>
         </ul>
       </motion.section>
 
@@ -157,10 +201,6 @@ const Detection = () => {
       >
         <Card className="w-full shadow-md border border-gray-300 dark:border-border bg-gray-50 dark:bg-background transition-colors">
           <CardContent className="p-6 flex flex-col gap-4">
-            <div className="text-sm text-muted-foreground">
-              Paste text, upload a .txt file, or fetch from a webpage
-            </div>
-
             <div className="flex gap-3">
               <input
                 type="url"
@@ -172,6 +212,7 @@ const Detection = () => {
               <Button
                 variant="outline"
                 onClick={handleFetchFromUrl}
+                disabled={isLoading}
                 className="border border-gray-300 dark:border-border bg-gray-50 dark:bg-background hover:bg-gray-100 dark:hover:bg-muted transition-colors"
               >
                 Fetch
@@ -181,7 +222,7 @@ const Detection = () => {
             <textarea
               value={text}
               onChange={(e) => onTextChange(e.target.value)}
-              placeholder="Paste your text here..."
+              placeholder="Paste or write text for detection..."
               className="w-full h-56 rounded-md p-4 border border-gray-300 dark:border-input bg-gray-50 dark:bg-background text-foreground focus:ring-2 focus:ring-blue-400 dark:focus:ring-ring focus:outline-none resize-none"
             />
 
@@ -189,39 +230,68 @@ const Detection = () => {
               <input
                 ref={inputRef}
                 type="file"
-                accept=".txt,text/plain"
+                accept="image/*"
                 className="hidden"
                 onChange={(e) => handleUpload(e.target.files?.[0])}
               />
-
               <div className="flex items-center gap-3">
                 <Button
                   variant="outline"
                   onClick={triggerFileDialog}
                   className="border border-gray-300 dark:border-border bg-gray-50 dark:bg-background hover:bg-gray-100 dark:hover:bg-muted transition-colors"
                 >
-                  Choose File
+                  Choose Image
                 </Button>
                 <span className="text-sm text-muted-foreground">
-                  {fileName ? fileName : "No file chosen"}
+                  {fileName ? fileName : "No image chosen"}
                 </span>
               </div>
+              <Button
+                variant="default"
+                onClick={handleDescribe}
+                disabled={!image || isVisionLoading}
+              >
+                {isVisionLoading ? "Analyzing..." : "Describe Image"}
+              </Button>
+            </div>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={handleClear}
-                  disabled={isLoading}
-                  className="border border-gray-300 dark:border-border bg-gray-50 dark:bg-background hover:bg-gray-100 dark:hover:bg-muted transition-colors"
-                >
-                  Clear
-                </Button>
-                <Button
-                  variant="default" onClick={handleScan} disabled={isLoading}
-                >
-                  {isLoading ? "Scanning..." : "Scan"}
-                </Button>
+            {imagePreview && (
+              <div className="mt-3 flex justify-center">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="max-h-64 rounded-md border border-gray-300 dark:border-border shadow-sm object-contain"
+                />
               </div>
+            )}
+
+            {visionText && (
+              <div className="mt-3">
+                <label className="text-sm font-medium">Image Description:</label>
+                <textarea
+                  value={visionText}
+                  onChange={(e) => setVisionText(e.target.value)}
+                  className="w-full h-32 mt-1 p-3 rounded-md border border-gray-300 dark:border-input bg-gray-50 dark:bg-background text-foreground focus:ring-2 focus:ring-blue-400 dark:focus:ring-ring focus:outline-none resize-none"
+                />
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={handleClear}
+                disabled={isLoading}
+                className="border border-gray-300 dark:border-border bg-gray-50 dark:bg-background hover:bg-gray-100 dark:hover:bg-muted transition-colors"
+              >
+                Clear
+              </Button>
+              <Button
+                variant="default"
+                onClick={handleScan}
+                disabled={isLoading}
+              >
+                {isLoading ? "Scanning..." : "Scan"}
+              </Button>
             </div>
 
             {error && <div className="text-sm text-red-500">{error}</div>}

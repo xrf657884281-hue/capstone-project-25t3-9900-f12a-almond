@@ -8,8 +8,9 @@ const Generate = () => {
   const [input, setInput] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>("");
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [generated, setGenerated] = useState<string>("");
-  const [visionText, setVisionText] = useState<string>(""); // ✅ 图片识别结果
+  const [visionText, setVisionText] = useState<string>("");
   const [isVisionLoading, setIsVisionLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +18,6 @@ const Generate = () => {
   const [topic, setTopic] = useState("General");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // 初始化：从 localStorage 恢复
   useEffect(() => {
     const savedNews = localStorage.getItem("generatedNews");
     if (savedNews) setGenerated(savedNews);
@@ -35,7 +35,6 @@ const Generate = () => {
     if (savedVision) setVisionText(savedVision);
   }, []);
 
-  // 输入事件
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     localStorage.setItem("newsInput", e.target.value);
@@ -56,12 +55,13 @@ const Generate = () => {
     setImage(file);
     setFileName(file.name);
     setVisionText("");
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
     console.log("Selected file:", file);
   };
 
   const triggerFileDialog = () => inputRef.current?.click();
 
-  // 将图片转 Base64
   const fileToBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -70,7 +70,6 @@ const Generate = () => {
       reader.readAsDataURL(file);
     });
 
-  // 调用图片识别接口
   const handleDescribe = async () => {
     if (!image) {
       setError("Please upload an image first.");
@@ -103,11 +102,10 @@ const Generate = () => {
     }
   };
 
-  // 生成新闻（合并输入框 + 图片识别文本）
   const handleGenerate = async () => {
     const basePrompt = [input.trim(), visionText.trim()]
       .filter(Boolean)
-      .join(". "); // ✅ 自动合并两者（去除空的）
+      .join(". ");
 
     if (!basePrompt) {
       setError("Please enter a topic or use an image description first.");
@@ -156,6 +154,7 @@ const Generate = () => {
     setFileName("");
     setGenerated("");
     setVisionText("");
+    setImagePreview(null); 
     setError(null);
     setTone("Normal");
     setTopic("General");
@@ -201,7 +200,6 @@ const Generate = () => {
       >
         <Card className="w-full shadow-md border border-gray-300 dark:border-border bg-gray-50 dark:bg-background transition-colors">
           <CardContent className="p-6 flex flex-col gap-4">
-            {/* 提示词输入 */}
             <textarea
               value={input}
               onChange={handleInputChange}
@@ -209,7 +207,6 @@ const Generate = () => {
               className="w-full h-40 rounded-md p-4 border border-gray-300 dark:border-input bg-gray-50 dark:bg-background text-foreground focus:ring-2 focus:ring-blue-400 dark:focus:ring-ring focus:outline-none resize-none"
             />
 
-            {/* 风格选择 */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">Choose Style:</label>
               <select
@@ -224,7 +221,6 @@ const Generate = () => {
               </select>
             </div>
 
-            {/* 主题选择 */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">Choose Topic:</label>
               <select
@@ -240,7 +236,6 @@ const Generate = () => {
               </select>
             </div>
 
-            {/* 图片上传与识别 */}
             <div className="flex items-center justify-between gap-4">
               <input
                 ref={inputRef}
@@ -254,7 +249,7 @@ const Generate = () => {
                   Choose Image
                 </Button>
                 <span className="text-sm text-muted-foreground">
-                  {fileName ? fileName : "No file chosen"}
+                  {fileName ? fileName : "No image chosen"}
                 </span>
               </div>
 
@@ -267,7 +262,16 @@ const Generate = () => {
               </Button>
             </div>
 
-            {/* 图片识别结果 */}
+            {imagePreview && (
+              <div className="mt-3 flex justify-center">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="max-h-64 rounded-md border border-gray-300 dark:border-border shadow-sm object-contain"
+                />
+              </div>
+            )}
+
             {visionText && (
               <div className="mt-3">
                 <label className="text-sm font-medium">Image Description:</label>
@@ -282,7 +286,6 @@ const Generate = () => {
               </div>
             )}
 
-            {/* 按钮 */}
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="outline" onClick={handleClear}>
                 Clear
@@ -292,14 +295,12 @@ const Generate = () => {
               </Button>
             </div>
 
-            {/* 错误提示 */}
             {error && (
               <div className="mt-2 p-3 border border-red-500 rounded-md bg-red-50 text-red-700 text-sm">
                 {error}
               </div>
             )}
 
-            {/* 生成结果 */}
             {generated && (
               <div className="mt-6 p-4 border border-gray-300 dark:border-border rounded-md bg-gray-50 dark:bg-muted transition-colors">
                 <h3 className="font-semibold mb-2">

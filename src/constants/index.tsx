@@ -13,6 +13,6 @@ export const NavRoutes = [
 
 export const navItems = [
   { path: "/detection", label: "Detection" },
-  { path: "/generate", label: "Generate" },
+  { path: "/generate", label: "Generation" },
   { path: "/about", label: "About Us" },
 ];
