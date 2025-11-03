@@ -74,6 +74,7 @@ app.add_middleware(
 detection_service = None
 improved_detection = None
 generation_service = None
+vision_service = None
 
 # Pydantic models
 class DetectionRequest(BaseModel):
@@ -87,6 +88,7 @@ class GenerationRequest(BaseModel):
     length_control: Optional[str] = "medium"
     emotional_tone: Optional[str] = "neutral"
     credibility_level: Optional[str] = "medium"
+    image_url_or_b64: Optional[str] = None
 
 class DetectionConfig(BaseModel):
     """Detection configuration for customizable detection"""
@@ -113,6 +115,7 @@ class RegisterRequest(BaseModel):
     username: str
     email: EmailStr
     password: str
+    avatar_url_or_b64: Optional[str] = None
 
 class LoginRequest(BaseModel):
     username_or_email: str
@@ -122,6 +125,12 @@ class FirebaseSyncRequest(BaseModel):
     uid: str
     email: Optional[EmailStr] = None
     display_name: Optional[str] = None
+    avatar_url_or_b64: Optional[str] = None
+
+class UpdateAvatarRequest(BaseModel):
+    uid: Optional[str] = None
+    username_or_email: Optional[str] = None
+    avatar_url_or_b64: str
 
 # Dependency injection  
 def get_detection_service():
@@ -160,11 +169,19 @@ def get_generation_service():
 def get_news_service():
     return NewsService()
 
+def get_vision_service():
+    """Lazy init VisionService for image understanding"""
+    global vision_service
+    if vision_service is None:
+        from services.vision_service import VisionService
+        vision_service = VisionService()
+    return vision_service
+
 # API routes
 @app.on_event("startup")
 async def startup_event():
     """Application startup event"""
-    global detection_service, improved_detection, generation_service
+    global detection_service, improved_detection, generation_service, vision_service
     
     logger.info("Starting MCP Fake News Detection System...")
     
@@ -179,6 +196,7 @@ async def startup_event():
     detection_service = None
     improved_detection = None
     generation_service = None
+    vision_service = None
     
     # Validate configuration
     if not Config.validate_config():
@@ -290,6 +308,7 @@ async def register_user(body: RegisterRequest, request: Request):
         "salt": hp["salt"],
         "role": "user",
         "is_active": True,
+        "avatar_url_or_b64": body.avatar_url_or_b64 or None,
         "created_at": datetime.utcnow().isoformat()
     }
     # Some environments created users collection with strict schema that omits `_id` in allowed fields.
@@ -364,6 +383,7 @@ async def firebase_sync(body: FirebaseSyncRequest, request: Request):
             "uid": body.uid,
             "email": str(body.email) if body.email else None,
             "display_name": body.display_name,
+            "avatar_url_or_b64": body.avatar_url_or_b64 if body.avatar_url_or_b64 else None,
             "is_active": True,
             "updated_at": datetime.utcnow().isoformat()
         },
@@ -387,19 +407,65 @@ async def firebase_sync(body: FirebaseSyncRequest, request: Request):
         pass
     return {"success": True, "upserted": bool(res.upserted_id)}
 
+@app.post("/api/auth/update_avatar")
+async def update_avatar(body: UpdateAvatarRequest, request: Request):
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    if not body.avatar_url_or_b64:
+        raise HTTPException(status_code=422, detail="avatar_url_or_b64 is required")
+    users = mongo_service.get_collection("users")
+    # Identify user
+    query = None
+    if body.uid:
+        query = {"uid": body.uid}
+    elif body.username_or_email:
+        query = {"$or": [{"username": body.username_or_email}, {"email": body.username_or_email}]}
+    else:
+        raise HTTPException(status_code=422, detail="Provide uid or username_or_email")
+    user = users.find_one(query)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    users.update_one(query, {"$set": {"avatar_url_or_b64": body.avatar_url_or_b64, "updated_at": datetime.utcnow().isoformat()}}, bypass_document_validation=True)
+    try:
+        if mongo_service.is_connected():
+            mongo_service.insert_one("user_activity_log", {
+                "action": "update_avatar",
+                "user": {"uid": user.get("uid"), "username": user.get("username"), "email": user.get("email")},
+                "request_meta": {"avatar_provided": True},
+                "result_meta": {"ok": True},
+                "client": _client_info(request),
+                "created_at": datetime.utcnow().isoformat()
+            })
+    except Exception:
+        pass
+    return {"success": True}
+
 # Detection endpoints
 @app.post("/api/detect/baseline")
 async def baseline_detection(
     request: DetectionRequest,
     service: Any = Depends(get_detection_service),
+    vision: Any = Depends(get_vision_service),
     http_request: Request = None
 ):
     """Baseline detection"""
     try:
         logger.info(f"Baseline detection request for text: {request.text[:100]}...")
+        # Auto-generate description from image if text is empty
+        req_text = (request.text or '').strip()
+        if (not req_text) and request.image_url_or_b64:
+            try:
+                vision_res = vision.describe_image(request.image_url_or_b64, detail_level="high")
+                if vision_res.get("success") and vision_res.get("description"):
+                    req_text = vision_res["description"][:1000]
+                    logger.info("Image description generated for baseline detection.")
+                else:
+                    logger.warning(f"Vision description failed: {vision_res.get('error')}")
+            except Exception as e:
+                logger.warning(f"Vision service error (baseline): {e}")
         
         result = service.baseline_detection(
-            text=request.text,
+            text=req_text or request.text,
             image_url_or_b64=request.image_url_or_b64
         )
         # Write to MongoDB (best-effort)
@@ -407,7 +473,7 @@ async def baseline_detection(
             if mongo_service.is_connected():
                 mongo_service.insert_one("detection_results", {
                     "type": "baseline",
-                    "text": request.text,
+                    "text": req_text or request.text,
                     "image_url_or_b64": request.image_url_or_b64,
                     "result": result,
                     "created_at": datetime.utcnow().isoformat()
@@ -415,14 +481,21 @@ async def baseline_detection(
         except Exception:
             pass
 
-        # activity log
+        # activity log (store input text and full result for audit)
         try:
             if mongo_service.is_connected():
                 mongo_service.insert_one("user_activity_log", {
                     "action": "detect_baseline",
                     "user": {},
-                    "request_meta": {"text_preview": request.text[:100]},
-                    "result_meta": {"ok": True},
+                    "request_meta": {
+                        "text_preview": (req_text or request.text)[:300],
+                        "image_provided": bool(request.image_url_or_b64),
+                        "image_url_or_b64": request.image_url_or_b64 or None
+                    },
+                    "result_meta": {
+                        "ok": True,
+                        "result": result  # store full detection result
+                    },
                     "client": _client_info(http_request),
                     "created_at": datetime.utcnow().isoformat()
                 })
@@ -443,11 +516,24 @@ async def improved_detection_endpoint(
     request: HybridDetectionRequest,
     detection_service: Any = Depends(get_detection_service),
     improved_service: Any = Depends(get_improved_detection),
+    vision: Any = Depends(get_vision_service),
     http_request: Request = None
 ):
     """Improved detection with customizable configuration"""
     try:
         logger.info(f"Improved detection request for text: {request.text[:100]}...")
+        # Auto image description if text empty and image provided
+        req_text = (request.text or '').strip()
+        if (not req_text) and request.image_url_or_b64:
+            try:
+                vision_res = vision.describe_image(request.image_url_or_b64, detail_level="high")
+                if vision_res.get("success") and vision_res.get("description"):
+                    req_text = vision_res["description"][:1000]
+                    logger.info("Image description generated for improved detection.")
+                else:
+                    logger.warning(f"Vision description failed: {vision_res.get('error')}")
+            except Exception as e:
+                logger.warning(f"Vision service error (improved): {e}")
         
         # Extract custom configuration
         config = request.detection_config.dict() if request.detection_config else {}
@@ -456,14 +542,14 @@ async def improved_detection_endpoint(
         if request.use_improved_detection:
             # Execute baseline detection
             baseline_results = detection_service.baseline_detection(
-                text=request.text,
+                text=req_text or request.text,
                 image_url_or_b64=request.image_url_or_b64
             )
             
             # Execute improved detection with custom config
             improved_results = improved_service.improved_detection(
                 baseline_results=baseline_results,
-                text=request.text,
+                text=req_text or request.text,
                 image_metadata=None,  # Can be extended with image metadata
                 detection_config=config  # NEW: Pass custom configuration
             )
@@ -472,7 +558,7 @@ async def improved_detection_endpoint(
                 if mongo_service.is_connected():
                     mongo_service.insert_one("detection_results", {
                         "type": "improved",
-                        "text": request.text,
+                        "text": req_text or request.text,
                         "image_url_or_b64": request.image_url_or_b64,
                         "config": config,
                         "baseline": baseline_results,
@@ -482,14 +568,22 @@ async def improved_detection_endpoint(
             except Exception:
                 pass
 
-            # activity log
+            # activity log (store input text and full improved result for audit)
             try:
                 if mongo_service.is_connected():
                     mongo_service.insert_one("user_activity_log", {
                         "action": "detect_improved",
                         "user": {},
-                        "request_meta": {"text_preview": request.text[:100], "use_improved": True},
-                        "result_meta": {"ok": True},
+                    "request_meta": {
+                            "text_preview": (req_text or request.text)[:300],
+                            "use_improved": True,
+                            "image_provided": bool(request.image_url_or_b64),
+                            "image_url_or_b64": request.image_url_or_b64 or None
+                        },
+                        "result_meta": {
+                            "ok": True,
+                            "result": improved_results  # store full improved detection result
+                        },
                         "client": _client_info(http_request),
                         "created_at": datetime.utcnow().isoformat()
                     })
@@ -504,18 +598,25 @@ async def improved_detection_endpoint(
         else:
             # Use baseline detection only
             result = detection_service.baseline_detection(
-                text=request.text,
+                text=req_text or request.text,
                 image_url_or_b64=request.image_url_or_b64
             )
             
-            # activity log (baseline-only path)
+            # activity log (baseline-only path, store full result)
             try:
                 if mongo_service.is_connected():
                     mongo_service.insert_one("user_activity_log", {
                         "action": "detect_baseline",
                         "user": {},
-                        "request_meta": {"text_preview": request.text[:100]},
-                        "result_meta": {"ok": True},
+                    "request_meta": {
+                            "text_preview": (req_text or request.text)[:300],
+                            "image_provided": bool(request.image_url_or_b64),
+                            "image_url_or_b64": request.image_url_or_b64 or None
+                        },
+                        "result_meta": {
+                            "ok": True,
+                            "result": result
+                        },
                         "client": _client_info(http_request),
                         "created_at": datetime.utcnow().isoformat()
                     })
@@ -537,15 +638,30 @@ async def generate_single(
     request: GenerationRequest,
     service: Any = Depends(get_generation_service),
     news_service: Any = Depends(get_news_service),
+    vision: Any = Depends(get_vision_service),
     http_request: Request = None
 ):
     """Generate single fake news sample - automatically searches for real news and generates based on it"""
     try:
         logger.info(f"Generation request for topic: {request.topic}")
+        # If topic empty but image provided, auto generate topic from image
+        req_topic_override = None
+        if (not (request.topic or '').strip()) and getattr(request, 'image_url_or_b64', None):
+            try:
+                vision_res = vision.describe_image(request.image_url_or_b64, detail_level="high",
+                                                  additional_prompt="请将总结部分的第一句话简洁概括成一个适合新闻报道的话题标题。")
+                if vision_res.get("success") and vision_res.get("description"):
+                    first_line = vision_res["description"].splitlines()[0].strip()
+                    req_topic_override = first_line[:120] if first_line else vision_res["description"][:120]
+                    logger.info("Image description generated for generation topic.")
+                else:
+                    logger.warning(f"Vision description failed (generation): {vision_res.get('error')}")
+            except Exception as e:
+                logger.warning(f"Vision service error (generation): {e}")
         
         # Extract style, domain, and actual topic from the prompt
         # Format: "Write a {topic} news article in a {tone} tone about: {baseTopic}"
-        topic_text = request.topic
+        topic_text = req_topic_override if req_topic_override else request.topic
         prompt_lower = topic_text.lower()
         
         # Parse style/tone from prompt - more precise matching
@@ -691,6 +807,15 @@ async def generate_single(
             except Exception as e:
                 logger.warning(f"Failed to search news: {e}")
         
+        # Prepare request_dict for MongoDB storage (used in both branches)
+        request_dict = request.dict()
+        if req_topic_override:
+            request_dict["topic"] = req_topic_override
+        if style:
+            request_dict["style"] = style
+        if domain:
+            request_dict["domain"] = domain
+        
         # If we found a source URL, generate from real news with style and domain
         if source_url and source_text:
             logger.info(f"Generating from real news: {source_url} (style={style}, domain={domain})")
@@ -704,34 +829,44 @@ async def generate_single(
             })
         else:
             # Fallback to original generation method with style and domain
-            request_dict = request.dict()
-            if style:
-                request_dict["style"] = style
-            if domain:
-                request_dict["domain"] = domain
             result = service.generate_fake_news(request_dict)
+        
         # Write to MongoDB (best-effort)
         try:
             if mongo_service.is_connected():
+                # Ensure strategy is set (required by MongoDB validator)
+                strategy_value = request.strategy if request.strategy else "loaded_language"
                 mongo_service.insert_one("generation_results", {
-                    "topic": request.topic,
-                    "strategy": request.strategy,
+                    "topic": req_topic_override or request.topic,
+                    "strategy": strategy_value,
                     "model_type": request.model_type,
+                    "image_url_or_b64": getattr(request, 'image_url_or_b64', None),
                     "params": request_dict,
                     "result": result,
                     "created_at": datetime.utcnow().isoformat()
                 })
-        except Exception:
+                logger.info(f"Successfully saved generation result to MongoDB")
+        except Exception as e:
+            logger.error(f"Failed to save generation result to MongoDB: {e}")
             pass
 
-        # activity log
+        # activity log (store generated article for audit)
         try:
             if mongo_service.is_connected():
                 mongo_service.insert_one("user_activity_log", {
                     "action": "generate_single",
                     "user": {},
-                    "request_meta": {"topic": request.topic, "strategy": request.strategy},
-                    "result_meta": {"ok": True},
+                    "request_meta": {
+                        "topic": req_topic_override or request.topic,
+                        "strategy": request.strategy,
+                        "image_provided": bool(getattr(request, 'image_url_or_b64', None)),
+                        "image_url_or_b64": getattr(request, 'image_url_or_b64', None)
+                    },
+                    "result_meta": {
+                        "ok": True,
+                        "article": (result.get("article") if isinstance(result, dict) else None),
+                        "result": result
+                    },
                     "client": _client_info(http_request),
                     "created_at": datetime.utcnow().isoformat()
                 })
@@ -857,6 +992,82 @@ async def get_service_info(
     except Exception as e:
         logger.error(f"Get service info error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ============ History query endpoints ==========
+class HistoryQuery(BaseModel):
+    page: Optional[int] = 1
+    page_size: Optional[int] = 10
+    q: Optional[str] = None  # text/topic keyword
+    user_id: Optional[str] = None  # 预留：若结果表中记录了用户标识则可按用户过滤
+    image_only: Optional[bool] = False
+
+def _pagination_params(page: Optional[int], page_size: Optional[int]) -> Dict[str, int]:
+    p = max(1, int(page or 1))
+    ps = max(1, min(int(page_size or 10), 100))
+    return {"skip": (p - 1) * ps, "limit": ps}
+
+@app.get("/api/detection/history")
+async def get_detection_history(
+    page: int = 1,
+    page_size: int = 10,
+    q: Optional[str] = None,
+    user_id: Optional[str] = None,
+    image_only: bool = False
+):
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    col = mongo_service.get_collection("detection_results")
+    query: Dict[str, Any] = {}
+    if q:
+        # 优先使用文本索引；没有则回退到正则
+        query["$or"] = [
+            {"text": {"$regex": q, "$options": "i"}},
+            {"type": {"$regex": q, "$options": "i"}}
+        ]
+    if user_id:
+        # 仅当文档包含 user_id 时生效（向后兼容，不会报错）
+        query["user_id"] = user_id
+    if image_only:
+        query["image_url_or_b64"] = {"$ne": None}
+    pg = _pagination_params(page, page_size)
+    total = col.count_documents(query)
+    cursor = col.find(query).sort("created_at", -1).skip(pg["skip"]).limit(pg["limit"])  # type: ignore
+    items = list(cursor)
+    # 将 ObjectId 转成字符串，避免前端解析问题
+    for it in items:
+        if it.get("_id") is not None:
+            it["_id"] = str(it["_id"])  # type: ignore
+    return {"success": True, "total": total, "page": page, "page_size": page_size, "items": items}
+
+@app.get("/api/generation/history")
+async def get_generation_history(
+    page: int = 1,
+    page_size: int = 10,
+    q: Optional[str] = None,
+    user_id: Optional[str] = None,
+    image_only: bool = False
+):
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    col = mongo_service.get_collection("generation_results")
+    query: Dict[str, Any] = {}
+    if q:
+        query["$or"] = [
+            {"topic": {"$regex": q, "$options": "i"}},
+            {"strategy": {"$regex": q, "$options": "i"}},
+        ]
+    if user_id:
+        query["user_id"] = user_id
+    if image_only:
+        query["image_url_or_b64"] = {"$ne": None}
+    pg = _pagination_params(page, page_size)
+    total = col.count_documents(query)
+    cursor = col.find(query).sort("created_at", -1).skip(pg["skip"]).limit(pg["limit"])  # type: ignore
+    items = list(cursor)
+    for it in items:
+        if it.get("_id") is not None:
+            it["_id"] = str(it["_id"])  # type: ignore
+    return {"success": True, "total": total, "page": page, "page_size": page_size, "items": items}
 
 # Legacy endpoints (for backward compatibility)
 @app.post("/generate_text")

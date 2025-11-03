@@ -19,7 +19,7 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  //Email+Password Login
+  // Email + Password Login
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -53,7 +53,6 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
     try {
       const prov = provider === "google" ? googleProvider : githubProvider;
       const res = await signInWithPopup(auth, prov);
-      console.log(provider + " login:", res.user);
 
       localStorage.setItem(
         "user",
@@ -66,12 +65,15 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
         })
       );
 
-      // 同步到后端（Mongo）
       try {
-        await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/auth/firebase_sync`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: res.user.uid, email: res.user.email, display_name: res.user.displayName })
+        await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/firebase_sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uid: res.user.uid,
+            email: res.user.email,
+            display_name: res.user.displayName,
+          }),
         });
       } catch {}
 
@@ -85,32 +87,31 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
   };
 
   const inputCls =
-    "w-full rounded-md px-3 py-2 border border-input " +
-    "bg-background text-foreground placeholder-muted-foreground " +
-    "focus:outline-none focus:ring-2 focus:ring-ring";
+    "w-full rounded-md px-3 py-2 border border-gray-300 dark:border-input " +
+    "bg-gray-50 dark:bg-background text-foreground placeholder-muted-foreground " +
+    "focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-ring transition";
 
   const socialButtonCls =
     "w-full flex items-center justify-center gap-2 rounded-md py-2 font-medium " +
-    "border border-input bg-background text-foreground " +
-    "hover:bg-accent transition disabled:opacity-50 disabled:cursor-not-allowed";
+    "border border-gray-300 dark:border-input bg-gray-50 dark:bg-background text-foreground " +
+    "hover:bg-gray-100 dark:hover:bg-muted transition disabled:opacity-50 disabled:cursor-not-allowed";
 
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl p-8 shadow bg-card text-card-foreground border border-border"
+        className="w-full max-w-md rounded-2xl p-8 shadow border border-gray-300 dark:border-border bg-gray-50 dark:bg-card text-card-foreground transition"
       >
         <h2 className="text-2xl font-bold mb-6 text-center">Sign In</h2>
 
         {error && (
-          <div className="mb-4 p-3 rounded-md bg-red-100 text-red-800 text-sm">
+          <div className="mb-4 p-3 rounded-md bg-red-50 dark:bg-red-100 text-red-700 text-sm border border-red-200">
             {error}
           </div>
         )}
 
-        {/* Email & Password */}
         <div className="mb-4 text-left">
-          <label className="block mb-1">Email</label>
+          <label className="block mb-1 font-medium text-sm">Email</label>
           <input
             type="email"
             name="email"
@@ -123,7 +124,7 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
         </div>
 
         <div className="mb-6 text-left">
-          <label className="block mb-1">Password</label>
+          <label className="block mb-1 font-medium text-sm">Password</label>
           <input
             type="password"
             name="password"
@@ -135,12 +136,8 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
           />
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md py-2 font-medium bg-primary text-primary-foreground hover:opacity-90 transition disabled:opacity-60"
-        >
-          {loading ? "Signing in..." : "Sign in"}
+        <button type="submit" disabled={loading} className="w-full rounded-md py-2 font-medium bg-primary text-primary-foreground hover:opacity-90 transition disabled:opacity-60" > 
+          {loading ? "Signing in..." : "Sign in"} 
         </button>
 
         <div className="space-y-3 mt-4">
@@ -176,7 +173,7 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
           Don’t have an account?{" "}
           <span
             onClick={() => navigate("/sign-up")}
-            className="text-primary cursor-pointer hover:underline"
+            className="text-blue-600 dark:text-primary cursor-pointer hover:underline"
           >
             Sign up
           </span>
