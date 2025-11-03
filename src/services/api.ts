@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export interface DetectionRequest {
   text: string;
@@ -22,6 +22,7 @@ export interface DetectionResponse {
 export interface GenerationRequest {
   topic: string;
   model?: string;
+  image_url_or_b64?: string; // ✅ 新增：允许图文生成
 }
 
 export interface GenerationResponse {
@@ -33,18 +34,32 @@ export interface GenerationResponse {
   timestamp: string;
 }
 
+// ✅ Vision Describe 请求与响应类型
+export interface VisionDescribeRequest {
+  image_url_or_b64: string;
+  detail_level?: "low" | "high" | "auto";
+  output_mode?: "detailed" | "concise";
+  max_chars?: number;
+}
+
+export interface VisionDescribeResponse {
+  success: boolean;
+  description?: string;
+  error?: string;
+}
+
 class ApiService {
   private async makeRequest<T>(
     endpoint: string,
-    method: 'GET' | 'POST' = 'GET',
+    method: "GET" | "POST" = "GET",
     body?: any
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
-    
+
     const options: RequestInit = {
       method,
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     };
 
@@ -55,15 +70,17 @@ class ApiService {
     try {
       console.log(`Making API request to: ${url}`);
       const response = await fetch(url, options);
-      
+
       console.log(`Response status: ${response.status}`);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`HTTP error response: ${errorText}`);
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
       }
-      
+
       const data = await response.json();
       console.log(`API response received for ${endpoint}:`, data);
       return data;
@@ -73,33 +90,77 @@ class ApiService {
     }
   }
 
+  // ===== Detection =====
   async detectImproved(request: DetectionRequest): Promise<DetectionResponse> {
-    return this.makeRequest<DetectionResponse>('/api/detect/improved', 'POST', request);
+    return this.makeRequest<DetectionResponse>(
+      "/api/detect/improved",
+      "POST",
+      request
+    );
   }
 
   async detectBaseline(text: string): Promise<DetectionResponse> {
-    return this.makeRequest<DetectionResponse>('/api/detect/baseline', 'POST', { text });
+    return this.makeRequest<DetectionResponse>("/api/detect/baseline", "POST", {
+      text,
+    });
   }
 
+  // ===== Generation =====
   async generateSingle(request: GenerationRequest): Promise<GenerationResponse> {
-    return this.makeRequest<GenerationResponse>('/api/generate/single', 'POST', request);
+    return this.makeRequest<GenerationResponse>(
+      "/api/generate/single",
+      "POST",
+      request
+    );
   }
 
-  async generateMultiple(request: GenerationRequest): Promise<GenerationResponse> {
-    return this.makeRequest<GenerationResponse>('/api/generate/multiple', 'POST', request);
+  async generateMultiple(
+    request: GenerationRequest
+  ): Promise<GenerationResponse> {
+    return this.makeRequest<GenerationResponse>(
+      "/api/generate/multiple",
+      "POST",
+      request
+    );
   }
 
+  // ===== Vision Describe =====
+  async visionDescribe(
+    request: VisionDescribeRequest
+  ): Promise<VisionDescribeResponse> {
+    return this.makeRequest<VisionDescribeResponse>(
+      "/api/vision/describe",
+      "POST",
+      request
+    );
+  }
+
+  // ===== System Health =====
   async checkHealth(): Promise<{ status: string; services: any }> {
-    return this.makeRequest<{ status: string; services: any }>('/health');
+    return this.makeRequest<{ status: string; services: any }>("/health");
   }
 
   // ===== Auth =====
-  async register(username: string, email: string, password: string): Promise<{ success: boolean; user_id: string }> {
-    return this.makeRequest('/api/auth/register', 'POST', { username, email, password });
+  async register(
+    username: string,
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; user_id: string }> {
+    return this.makeRequest("/api/auth/register", "POST", {
+      username,
+      email,
+      password,
+    });
   }
 
-  async login(usernameOrEmail: string, password: string): Promise<{ success: boolean; username: string; email: string }> {
-    return this.makeRequest('/api/auth/login', 'POST', { username_or_email: usernameOrEmail, password });
+  async login(
+    usernameOrEmail: string,
+    password: string
+  ): Promise<{ success: boolean; username: string; email: string }> {
+    return this.makeRequest("/api/auth/login", "POST", {
+      username_or_email: usernameOrEmail,
+      password,
+    });
   }
 }
 

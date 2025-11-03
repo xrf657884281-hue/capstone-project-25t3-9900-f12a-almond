@@ -9,12 +9,15 @@ const Generate = () => {
   const [image, setImage] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [generated, setGenerated] = useState<string>("");
+  const [visionText, setVisionText] = useState<string>(""); // ✅ 图片识别结果
+  const [isVisionLoading, setIsVisionLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tone, setTone] = useState("Normal");
   const [topic, setTopic] = useState("General");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  // 初始化：从 localStorage 恢复
   useEffect(() => {
     const savedNews = localStorage.getItem("generatedNews");
     if (savedNews) setGenerated(savedNews);
@@ -27,8 +30,12 @@ const Generate = () => {
 
     const savedTopic = localStorage.getItem("newsTopic");
     if (savedTopic) setTopic(savedTopic);
+
+    const savedVision = localStorage.getItem("visionText");
+    if (savedVision) setVisionText(savedVision);
   }, []);
 
+  // 输入事件
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     localStorage.setItem("newsInput", e.target.value);
@@ -44,9 +51,66 @@ const Generate = () => {
     localStorage.setItem("newsTopic", e.target.value);
   };
 
+  const handleUpload = (file?: File | null) => {
+    if (!file) return;
+    setImage(file);
+    setFileName(file.name);
+    setVisionText("");
+    console.log("Selected file:", file);
+  };
+
+  const triggerFileDialog = () => inputRef.current?.click();
+
+  // 将图片转 Base64
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  // 调用图片识别接口
+  const handleDescribe = async () => {
+    if (!image) {
+      setError("Please upload an image first.");
+      return;
+    }
+    setIsVisionLoading(true);
+    setError(null);
+
+    try {
+      const base64 = await fileToBase64(image);
+      const res = await apiService.visionDescribe({
+        image_url_or_b64: base64,
+        detail_level: "high",
+        output_mode: "detailed",
+      });
+
+      if (res.success && res.description) {
+        setVisionText(res.description);
+        localStorage.setItem("visionText", res.description);
+      } else {
+        setError(res.error || "Failed to describe image.");
+      }
+    } catch (err) {
+      console.error("Vision describe error:", err);
+      setError(
+        `Vision failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    } finally {
+      setIsVisionLoading(false);
+    }
+  };
+
+  // 生成新闻（合并输入框 + 图片识别文本）
   const handleGenerate = async () => {
-    if (!input.trim()) {
-      setError("Please enter a topic first.");
+    const basePrompt = [input.trim(), visionText.trim()]
+      .filter(Boolean)
+      .join(". "); // ✅ 自动合并两者（去除空的）
+
+    if (!basePrompt) {
+      setError("Please enter a topic or use an image description first.");
       return;
     }
 
@@ -54,23 +118,18 @@ const Generate = () => {
     setIsLoading(true);
 
     try {
-      const basePrompt = input.trim();
-
       const parts: string[] = [];
-      if (topic !== "General") {
+      if (topic !== "General")
         parts.push(`Write a ${topic} news article`);
-      } else {
-        parts.push(`Write a general news article`);
-      }
+      else parts.push("Write a general news article");
 
-      if (tone !== "Normal") {
-        parts.push(`in a ${tone} tone`);
-      }
+      if (tone !== "Normal") parts.push(`in a ${tone} tone`);
 
       const finalPrompt = `${parts.join(" ")} about: ${basePrompt}`;
 
       const response = await apiService.generateSingle({
         topic: finalPrompt,
+        image_url_or_b64: image ? await fileToBase64(image) : undefined,
       });
 
       if (response.success && response.result.article) {
@@ -96,23 +155,12 @@ const Generate = () => {
     setImage(null);
     setFileName("");
     setGenerated("");
+    setVisionText("");
     setError(null);
     setTone("Normal");
     setTopic("General");
     if (inputRef.current) inputRef.current.value = "";
-    localStorage.removeItem("generatedNews");
-    localStorage.removeItem("newsInput");
-    localStorage.removeItem("newsTone");
-    localStorage.removeItem("newsTopic");
-  };
-
-  const triggerFileDialog = () => inputRef.current?.click();
-
-  const handleUpload = (file?: File | null) => {
-    if (!file) return;
-    setImage(file);
-    setFileName(file.name);
-    console.log("Selected file:", file);
+    localStorage.clear();
   };
 
   const handleCopy = async () => {
@@ -140,13 +188,8 @@ const Generate = () => {
           </span>
         </h1>
         <p className="text-lg text-muted-foreground mb-4">
-          This project explores the potential of{" "}
-          <strong>AI-powered fake news generation and detection.</strong>
-        </p>
-        <p className="text-base text-muted-foreground">
-          Enter text or upload an image. The system will use Chat-GPT-4o to
-          generate related fake news content, which can then be tested in the
-          detection module.
+          Enter a topic or upload an image. The system will combine both to
+          generate realistic fake news using AI.
         </p>
       </motion.div>
 
@@ -158,13 +201,15 @@ const Generate = () => {
       >
         <Card className="w-full shadow-md border border-gray-300 dark:border-border bg-gray-50 dark:bg-background transition-colors">
           <CardContent className="p-6 flex flex-col gap-4">
+            {/* 提示词输入 */}
             <textarea
               value={input}
               onChange={handleInputChange}
-              placeholder="Paste your text or write a prompt..."
+              placeholder="Enter your topic or idea for the fake news..."
               className="w-full h-40 rounded-md p-4 border border-gray-300 dark:border-input bg-gray-50 dark:bg-background text-foreground focus:ring-2 focus:ring-blue-400 dark:focus:ring-ring focus:outline-none resize-none"
             />
 
+            {/* 风格选择 */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">Choose Style:</label>
               <select
@@ -179,6 +224,7 @@ const Generate = () => {
               </select>
             </div>
 
+            {/* 主题选择 */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">Choose Topic:</label>
               <select
@@ -194,6 +240,7 @@ const Generate = () => {
               </select>
             </div>
 
+            {/* 图片上传与识别 */}
             <div className="flex items-center justify-between gap-4">
               <input
                 ref={inputRef}
@@ -202,13 +249,8 @@ const Generate = () => {
                 className="hidden"
                 onChange={(e) => handleUpload(e.target.files?.[0])}
               />
-
               <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  onClick={triggerFileDialog}
-                  className="border border-gray-300 dark:border-border bg-gray-50 dark:bg-background hover:bg-gray-100 dark:hover:bg-muted transition-colors"
-                >
+                <Button variant="outline" onClick={triggerFileDialog}>
                   Choose Image
                 </Button>
                 <span className="text-sm text-muted-foreground">
@@ -216,31 +258,48 @@ const Generate = () => {
                 </span>
               </div>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={handleClear}
-                  disabled={isLoading}
-                  className="border border-gray-300 dark:border-border bg-gray-50 dark:bg-background hover:bg-gray-100 dark:hover:bg-muted transition-colors"
-                >
-                  Clear
-                </Button>
-                <Button
-                  variant="default"
-                  onClick={handleGenerate}
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Generating..." : "Generate"}
-                </Button>
-              </div>
+              <Button
+                variant="default"
+                onClick={handleDescribe}
+                disabled={!image || isVisionLoading}
+              >
+                {isVisionLoading ? "Analyzing..." : "Describe Image"}
+              </Button>
             </div>
 
+            {/* 图片识别结果 */}
+            {visionText && (
+              <div className="mt-3">
+                <label className="text-sm font-medium">Image Description:</label>
+                <textarea
+                  value={visionText}
+                  onChange={(e) => {
+                    setVisionText(e.target.value);
+                    localStorage.setItem("visionText", e.target.value);
+                  }}
+                  className="w-full h-32 mt-1 p-3 rounded-md border border-gray-300 dark:border-input bg-gray-50 dark:bg-background text-foreground focus:ring-2 focus:ring-blue-400 dark:focus:ring-ring focus:outline-none resize-none"
+                />
+              </div>
+            )}
+
+            {/* 按钮 */}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={handleClear}>
+                Clear
+              </Button>
+              <Button variant="default" onClick={handleGenerate} disabled={isLoading}>
+                {isLoading ? "Generating..." : "Generate News"}
+              </Button>
+            </div>
+
+            {/* 错误提示 */}
             {error && (
               <div className="mt-2 p-3 border border-red-500 rounded-md bg-red-50 text-red-700 text-sm">
                 {error}
               </div>
             )}
 
+            {/* 生成结果 */}
             {generated && (
               <div className="mt-6 p-4 border border-gray-300 dark:border-border rounded-md bg-gray-50 dark:bg-muted transition-colors">
                 <h3 className="font-semibold mb-2">
@@ -250,11 +309,7 @@ const Generate = () => {
                   {generated}
                 </p>
                 <div className="flex justify-end mt-3">
-                  <Button
-                    variant="outline"
-                    onClick={handleCopy}
-                    className="border border-gray-300 dark:border-border bg-gray-50 dark:bg-background hover:bg-gray-100 dark:hover:bg-muted transition-colors"
-                  >
+                  <Button variant="outline" onClick={handleCopy}>
                     Copy
                   </Button>
                 </div>
