@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {PieChart,Pie,Cell,Legend,Tooltip,ResponsiveContainer,} from "recharts";
+import type { PieLabelRenderProps } from "recharts";
 
 type StoredUser = {
   uid?: string;
@@ -17,9 +19,12 @@ type FormState = {
 };
 
 const inputCls =
-  "w-full rounded-md px-3 py-2 border border-input " +
-  "bg-background text-foreground placeholder-muted-foreground " +
-  "focus:outline-none focus:ring-2 focus:ring-ring";
+  "w-full rounded-md px-3 py-2 " +
+  "border border-gray-300 dark:border-input " +          
+  "bg-gray-50 dark:bg-background " +                 
+  "text-foreground placeholder-muted-foreground " +
+  "focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring " +
+  "transition-colors";
 
 const Profile = () => {
   const [form, setForm] = useState<FormState>({
@@ -42,18 +47,16 @@ const Profile = () => {
         const username = u.displayName ?? "User";
         const email = u.email ?? "user@example.com";
         const photoURL = u.photoURL ?? null;
-
         setForm({ username, email, photoURL });
         setInitial({ username, email, photoURL });
         setPreview(photoURL);
-        return;
+      } else {
+        setForm({ username: "User", email: "user@example.com", photoURL: null });
+        setInitial({ username: "User", email: "user@example.com", photoURL: null });
       }
     } catch {
-      // ignore
+      setForm({ username: "User", email: "user@example.com", photoURL: null });
     }
-    setForm({ username: "User", email: "user@example.com", photoURL: null });
-    setInitial({ username: "User", email: "user@example.com", photoURL: null });
-    setPreview(null);
   }, []);
 
   const hasChanges =
@@ -102,66 +105,122 @@ const Profile = () => {
     }
   };
 
+  const COLORS = ["#22c55e", "#ef4444", "#facc15"];
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col items-center px-4 py-10">
       <h1 className="text-3xl font-bold mb-6">Profile</h1>
-      <Card className="w-full max-w-3xl border border-border shadow">
-        <CardContent className="p-6 space-y-6">
-          <div className="flex items-center gap-6">
-            <label className="cursor-pointer">
-              <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center overflow-hidden border">
-                {preview ? (
-                  <img
-                    src={preview}
-                    alt="avatar"
-                    className="w-full h-full object-cover"
+
+      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-3 space-y-4">
+          <Card className="border border-gray-300 dark:border-border shadow">
+            <CardContent className="p-4">
+              <h2 className="text-lg font-semibold mb-3">Detection History</h2>
+              <p className="text-sm text-muted-foreground">
+                No detection history available.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="lg:col-span-6">
+          <Card className="border border-gray-300 dark:border-border shadow">
+            <CardContent className="p-6">
+              <h2 className="text-lg font-semibold mb-4 text-center">
+                Detection Statistics
+              </h2>
+
+              <ResponsiveContainer width="100%" height={350}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: "Real", value: 5 },
+                      { name: "Fake", value: 3 },
+                      { name: "Misleading", value: 2 },
+                    ]}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={120}
+                    dataKey="value"
+                    nameKey="name"
+                    label={(props: PieLabelRenderProps) =>
+                      `${props.name ?? ""} (${props.value ?? 0})`
+                    }
+                  >
+                    <Cell fill={COLORS[0]} />
+                    <Cell fill={COLORS[1]} />
+                    <Cell fill={COLORS[2]} />
+                  </Pie>
+                  <Tooltip />
+                  <Legend verticalAlign="bottom" height={36} />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="lg:col-span-3">
+          <Card className="border border-gray-300 dark:border-border shadow">
+            <CardContent className="p-6 space-y-6">
+              <div className="flex items-center justify-center">
+                <label className="cursor-pointer">
+                  <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center overflow-hidden border">
+                    {preview ? (
+                      <img
+                        src={preview}
+                        alt="avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        Choose Avatar
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarChange}
                   />
-                ) : (
-                  <span className="text-sm text-muted-foreground">Choose Avatar</span>
-                )}
+                </label>
               </div>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAvatarChange}
-              />
-            </label>
-          </div>
 
-          <div className="space-y-4">
-            <div className="text-left">
-              <label className="block mb-1 font-medium">Username</label>
-              <input
-                type="text"
-                name="username"
-                value={form.username}
-                onChange={handleChange}
-                className={inputCls}
-                placeholder="Enter your username"
-              />
-            </div>
+              <div className="space-y-4">
+                <div className="text-left">
+                  <label className="block mb-1 font-medium">Username</label>
+                  <input
+                    type="text"
+                    name="username"
+                    value={form.username}
+                    onChange={handleChange}
+                    className={inputCls}
+                    placeholder="Enter your username"
+                  />
+                </div>
 
-            <div className="text-left">
-              <label className="block mb-1 font-medium">Email</label>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                className={inputCls}
-                placeholder="Enter your email"
-              />
-            </div>
-          </div>
+                <div className="text-left">
+                  <label className="block mb-1 font-medium">Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={form.email}
+                    onChange={handleChange}
+                    className={inputCls}
+                    placeholder="Enter your email"
+                  />
+                </div>
+              </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <Button variant="default" onClick={handleSave} disabled={!hasChanges}>
-              Save Changes
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <Button variant="default" onClick={handleSave} disabled={!hasChanges}>
+                  Save Changes
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };

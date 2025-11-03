@@ -141,9 +141,7 @@ const Generate = () => {
         </h1>
         <p className="text-lg text-muted-foreground mb-4">
           This project explores the potential of{" "}
-          <strong>AI-powered fake news generation and detection.</strong> We
-          built a multi-agent generator that simulates news text and tests the
-          robustness of detection models.
+          <strong>AI-powered fake news generation and detection.</strong>
         </p>
         <p className="text-base text-muted-foreground">
           Enter text or upload an image. The system will use Chat-GPT-4o to
@@ -158,13 +156,13 @@ const Generate = () => {
         transition={{ duration: 0.5 }}
         className="flex-1 w-full max-w-2xl"
       >
-        <Card className="w-full shadow-lg border border-border">
+        <Card className="w-full shadow-md border border-gray-300 dark:border-border bg-gray-50 dark:bg-background transition-colors">
           <CardContent className="p-6 flex flex-col gap-4">
             <textarea
               value={input}
               onChange={handleInputChange}
               placeholder="Paste your text or write a prompt..."
-              className="w-full h-40 rounded-md p-4 border border-input bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none resize-none"
+              className="w-full h-40 rounded-md p-4 border border-gray-300 dark:border-input bg-gray-50 dark:bg-background text-foreground focus:ring-2 focus:ring-blue-400 dark:focus:ring-ring focus:outline-none resize-none"
             />
 
             <div className="flex flex-col gap-2">
@@ -172,21 +170,12 @@ const Generate = () => {
               <select
                 value={tone}
                 onChange={handleToneChange}
-                className="w-full p-2 border rounded-md bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+                className="w-full p-2 rounded-md border border-gray-300 dark:border-input bg-gray-50 dark:bg-background text-foreground focus:ring-2 focus:ring-blue-400 dark:focus:ring-ring focus:outline-none"
               >
-                <option value="Formal">
-                  Formal — Use a professional, neutral, and authoritative tone.
-                </option>
-                <option value="Sensational">
-                  Sensational — Use dramatic, emotional, and attention-grabbing
-                  language.
-                </option>
-                <option value="Fun">
-                  Fun — Use playful, humorous, and light-hearted expressions.
-                </option>
-                <option value="Normal">
-                  Normal — Use a natural, everyday news tone.
-                </option>
+                <option value="Formal">Formal — Professional and neutral.</option>
+                <option value="Sensational">Sensational — Dramatic and emotional.</option>
+                <option value="Fun">Fun — Playful and light-hearted.</option>
+                <option value="Normal">Normal — Standard news tone.</option>
               </select>
             </div>
 
@@ -195,23 +184,13 @@ const Generate = () => {
               <select
                 value={topic}
                 onChange={handleTopicChange}
-                className="w-full p-2 border rounded-md bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+                className="w-full p-2 rounded-md border border-gray-300 dark:border-input bg-gray-50 dark:bg-background text-foreground focus:ring-2 focus:ring-blue-400 dark:focus:ring-ring focus:outline-none"
               >
-                <option value="Politics">
-                  Politics — Cover government policies, elections, and
-                  international relations.
-                </option>
-                <option value="Business">
-                  Business — Focus on markets, companies, and economic trends.
-                </option>
-                <option value="Sports">
-                  Sports — Report on games, athletes, and sporting events.
-                </option>
-                <option value="Technology">
-                  Technology — Highlight innovations, digital trends, and new
-                  gadgets.
-                </option>
-                <option value="General">General — No specific topic focus.</option>
+                <option value="Politics">Politics — Government and elections.</option>
+                <option value="Business">Business — Markets and economics.</option>
+                <option value="Sports">Sports — Games and events.</option>
+                <option value="Technology">Technology — Innovations and trends.</option>
+                <option value="General">General — No specific topic.</option>
               </select>
             </div>
 
@@ -225,7 +204,11 @@ const Generate = () => {
               />
 
               <div className="flex items-center gap-3">
-                <Button variant="outline" onClick={triggerFileDialog}>
+                <Button
+                  variant="outline"
+                  onClick={triggerFileDialog}
+                  className="border border-gray-300 dark:border-border bg-gray-50 dark:bg-background hover:bg-gray-100 dark:hover:bg-muted transition-colors"
+                >
                   Choose Image
                 </Button>
                 <span className="text-sm text-muted-foreground">
@@ -238,6 +221,7 @@ const Generate = () => {
                   variant="outline"
                   onClick={handleClear}
                   disabled={isLoading}
+                  className="border border-gray-300 dark:border-border bg-gray-50 dark:bg-background hover:bg-gray-100 dark:hover:bg-muted transition-colors"
                 >
                   Clear
                 </Button>
@@ -258,7 +242,7 @@ const Generate = () => {
             )}
 
             {generated && (
-              <div className="mt-6 p-4 border rounded-md bg-muted">
+              <div className="mt-6 p-4 border border-gray-300 dark:border-border rounded-md bg-gray-50 dark:bg-muted transition-colors">
                 <h3 className="font-semibold mb-2">
                   Generated News ({topic} | {tone})
                 </h3>
@@ -266,7 +250,11 @@ const Generate = () => {
                   {generated}
                 </p>
                 <div className="flex justify-end mt-3">
-                  <Button variant="default" onClick={handleCopy}>
+                  <Button
+                    variant="outline"
+                    onClick={handleCopy}
+                    className="border border-gray-300 dark:border-border bg-gray-50 dark:bg-background hover:bg-gray-100 dark:hover:bg-muted transition-colors"
+                  >
                     Copy
                   </Button>
                 </div>
