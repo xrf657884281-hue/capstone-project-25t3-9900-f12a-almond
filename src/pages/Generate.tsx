@@ -10,6 +10,7 @@ const Generate = () => {
   const [fileName, setFileName] = useState<string>("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [generated, setGenerated] = useState<string>("");
+  const [sourceUrl, setSourceUrl] = useState<string>("");
   const [visionText, setVisionText] = useState<string>("");
   const [isVisionLoading, setIsVisionLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -21,6 +22,9 @@ const Generate = () => {
   useEffect(() => {
     const savedNews = localStorage.getItem("generatedNews");
     if (savedNews) setGenerated(savedNews);
+
+    const savedSourceUrl = localStorage.getItem("sourceUrl");
+    if (savedSourceUrl) setSourceUrl(savedSourceUrl);
 
     const savedInput = localStorage.getItem("newsInput");
     if (savedInput) setInput(savedInput);
@@ -131,8 +135,29 @@ const Generate = () => {
       });
 
       if (response.success && response.result.article) {
-        setGenerated(response.result.article);
-        localStorage.setItem("generatedNews", response.result.article);
+        let articleText = response.result.article;
+        let extractedUrl = "";
+        
+        // Extract source_url from result or from last line of article
+        if (response.result.source_url) {
+          extractedUrl = response.result.source_url;
+        } else {
+          // Fallback: extract URL from last line if it starts with "Original report:"
+          const lines = articleText.split('\n');
+          const lastLine = lines[lines.length - 1].trim();
+          if (lastLine.toLowerCase().startsWith('original report:')) {
+            extractedUrl = lastLine.replace(/^original report:\s*/i, '').trim();
+            lines.pop(); // Remove the last line
+            articleText = lines.join('\n').trim();
+          }
+        }
+        
+        setGenerated(articleText);
+        setSourceUrl(extractedUrl);
+        localStorage.setItem("generatedNews", articleText);
+        if (extractedUrl) {
+          localStorage.setItem("sourceUrl", extractedUrl);
+        }
       } else {
         setError("Generation failed. Please try again.");
       }
@@ -153,6 +178,7 @@ const Generate = () => {
     setImage(null);
     setFileName("");
     setGenerated("");
+    setSourceUrl("");
     setVisionText("");
     setImagePreview(null); 
     setError(null);
@@ -298,6 +324,20 @@ const Generate = () => {
             {error && (
               <div className="mt-2 p-3 border border-red-500 rounded-md bg-red-50 text-red-700 text-sm">
                 {error}
+              </div>
+            )}
+
+            {sourceUrl && (
+              <div className="mt-6 p-4 border border-gray-300 dark:border-border rounded-md bg-gray-50 dark:bg-background transition-colors">
+                <label className="text-sm font-medium mb-2 block">Original Source URL:</label>
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline break-all"
+                >
+                  {sourceUrl}
+                </a>
               </div>
             )}
 

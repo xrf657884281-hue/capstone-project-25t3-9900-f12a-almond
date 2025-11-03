@@ -30,6 +30,7 @@ export interface GenerationResponse {
   result: {
     generated_text?: string;
     article?: string;
+    source_url?: string;
   };
   timestamp: string;
 }
