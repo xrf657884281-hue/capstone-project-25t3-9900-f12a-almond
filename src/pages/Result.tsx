@@ -127,6 +127,8 @@ const Result = () => {
             </CardContent>
           </Card>
 
+          <h1 className='font-bold text-3lg'>Related News</h1>
+
           <div className="grid grid-cols-4 gap-4">
             <Card
               className="border border-gray-300 dark:border-border shadow cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200"
