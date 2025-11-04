@@ -67,6 +67,12 @@ const Result = () => {
     navigate("/profile");
   };
 
+  const handleCardClick = (cardNumber: number) => {
+    console.log(`Card ${cardNumber} clicked`);
+    // Add your click logic here
+    // e.g., navigate to another page or show a modal
+  };
+
   return (
     <div className="min-h-screen px-6 py-10 bg-background text-foreground">
       <div className="mx-auto w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -120,8 +126,50 @@ const Result = () => {
               )}
             </CardContent>
           </Card>
-        </div>
 
+          <div className="grid grid-cols-4 gap-4">
+            <Card
+              className="border border-gray-300 dark:border-border shadow cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200"
+              onClick={() => handleCardClick(1)}
+            >
+              <CardContent className="p-4">
+                <h3 className="text-sm font-semibold mb-2">Card 1</h3>
+                <p className="text-xs text-muted-foreground">Content here</p>
+              </CardContent>
+            </Card>
+
+            <Card
+              className="border border-gray-300 dark:border-border shadow cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200"
+              onClick={() => handleCardClick(2)}
+            >
+              <CardContent className="p-4">
+                <h3 className="text-sm font-semibold mb-2">Card 2</h3>
+                <p className="text-xs text-muted-foreground">Content here</p>
+              </CardContent>
+            </Card>
+
+            <Card
+              className="border border-gray-300 dark:border-border shadow cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200"
+              onClick={() => handleCardClick(3)}
+            >
+              <CardContent className="p-4">
+                <h3 className="text-sm font-semibold mb-2">Card 3</h3>
+                <p className="text-xs text-muted-foreground">Content here</p>
+              </CardContent>
+            </Card>
+
+            <Card
+              className="border border-gray-300 dark:border-border shadow cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200"
+              onClick={() => handleCardClick(4)}
+            >
+              <CardContent className="p-4">
+                <h3 className="text-sm font-semibold mb-2">Card 4</h3>
+                <p className="text-xs text-muted-foreground">Content here</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      
         <div className="lg:col-span-5 space-y-4">
           <h2 className="text-lg font-semibold">Basic Scan</h2>
           <Card className="border border-gray-300 dark:border-border shadow">
