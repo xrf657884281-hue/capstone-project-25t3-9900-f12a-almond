@@ -17,7 +17,7 @@ import { Link } from "react-router-dom";
 import SignIn from "./pages/Sign-in";
 import SignUp from "./pages/Sign-up";
 import Profile from "./pages/Profile";
-import Result from "./pages/result";
+import Result from "./pages/Result";
 
 const App = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

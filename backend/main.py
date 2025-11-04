@@ -132,6 +132,14 @@ class UpdateAvatarRequest(BaseModel):
     username_or_email: Optional[str] = None
     avatar_url_or_b64: str
 
+# ============ Vision describe models ============
+class VisionDescribeRequest(BaseModel):
+    image_url_or_b64: str
+    detail_level: Optional[str] = "high"  # "low" | "high" | "auto"
+    additional_prompt: Optional[str] = None
+    output_mode: Optional[str] = "detailed"  # "detailed" | "concise"
+    max_chars: Optional[int] = None  # None or <=0 表示不截断
+
 # Dependency injection  
 def get_detection_service():
     global detection_service
@@ -253,6 +261,47 @@ async def health_check():
             "mongodb": mongo_service.is_connected()
         }
     }
+
+# ============ Vision endpoints ============
+@app.post("/api/vision/describe")
+async def vision_describe(
+    body: VisionDescribeRequest,
+    vision: Any = Depends(get_vision_service),
+    http_request: Request = None
+):
+    try:
+        res = vision.describe_image(
+            image_url_or_b64=body.image_url_or_b64,
+            detail_level=body.detail_level or "high",
+            additional_prompt=body.additional_prompt,
+            output_mode=body.output_mode or "detailed",
+            max_chars=(body.max_chars if (body.max_chars is not None) else None)
+        )
+        # activity log (best-effort)
+        try:
+            if mongo_service.is_connected():
+                mongo_service.insert_one("user_activity_log", {
+                    "action": "vision_describe",
+                    "user": {},
+                    "request_meta": {
+                        "image_provided": bool(body.image_url_or_b64),
+                        "image_url_or_b64": body.image_url_or_b64,
+                        "detail_level": body.detail_level or "high"
+                    },
+                    "result_meta": {
+                        "ok": bool(res.get("success")),
+                        "error": res.get("error")
+                    },
+                    "client": _client_info(http_request),
+                    "created_at": datetime.utcnow().isoformat()
+                })
+        except Exception:
+            pass
+
+        return res
+    except Exception as e:
+        logger.error(f"Vision describe error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/db/health")
 async def db_health():
@@ -993,12 +1042,88 @@ async def get_service_info(
         logger.error(f"Get service info error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============ News search endpoints ==========
+@app.get("/api/news/search")
+async def search_news(
+    q: str,
+    page_size: int = 4,
+    language: str = "en",
+    news_service: Any = Depends(get_news_service)
+):
+    """Search for related real news articles (simple search)"""
+    try:
+        logger.info(f"News search request: query={q}, page_size={page_size}")
+        result = news_service.search_news(
+            query=q,
+            language=language,
+            page_size=page_size
+        )
+        return {
+            "success": True,
+            "result": result,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"News search error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class SmartNewsSearchRequest(BaseModel):
+    text: str
+    detection_result: Optional[Dict] = None
+    max_results: Optional[int] = 4
+    language: Optional[str] = "en"
+
+@app.post("/api/news/find_related")
+async def find_related_news(request: SmartNewsSearchRequest, http_request: Request = None):
+    """Smart news search with entity extraction and keyword analysis"""
+    try:
+        logger.info(f"Smart news search request for text (length: {len(request.text)})")
+        
+        from services.find_news import related_news_finder
+        
+        result = related_news_finder.find_related_news(
+            text=request.text,
+            detection_result=request.detection_result,
+            max_results=request.max_results or 4,
+            language=request.language or "en"
+        )
+        
+        # Activity log
+        try:
+            if mongo_service.is_connected():
+                mongo_service.insert_one("user_activity_log", {
+                    "action": "find_related_news",
+                    "user": {},
+                    "request_meta": {
+                        "text_preview": request.text[:200],
+                        "max_results": request.max_results
+                    },
+                    "result_meta": {
+                        "success": result.get('success'),
+                        "articles_found": len(result.get('articles', [])),
+                        "search_query": result.get('search_query')
+                    },
+                    "client": _client_info(http_request),
+                    "created_at": datetime.utcnow().isoformat()
+                })
+        except Exception:
+            pass
+        
+        return {
+            "success": True,
+            "result": result,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Smart news search error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============ History query endpoints ==========
 class HistoryQuery(BaseModel):
     page: Optional[int] = 1
     page_size: Optional[int] = 10
     q: Optional[str] = None  # text/topic keyword
-    user_id: Optional[str] = None  # 预留：若结果表中记录了用户标识则可按用户过滤
+    user_id: Optional[str] = None  # 
     image_only: Optional[bool] = False
 
 def _pagination_params(page: Optional[int], page_size: Optional[int]) -> Dict[str, int]:

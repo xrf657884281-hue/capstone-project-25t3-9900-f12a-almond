@@ -1,7 +1,7 @@
-"""
-Improved Detection - Enhanced Detection Module
-Responsible for detector fusion, rhetorical analysis, cross-modal checking and fact verification
-"""
+
+
+
+   
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 import torch
@@ -15,8 +15,8 @@ from textstat import flesch_reading_ease, flesch_kincaid_grade
 from collections import Counter
 import spacy
 import logging
-# Fact verification now integrated into DetectionService
-# Import verifier (Tavily only)
+                                                        
+                               
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,7 +25,7 @@ from utils.tavily_verifier import TavilyVerifier
 logger = logging.getLogger(__name__)
 
 def convert_to_native_types(obj: Any) -> Any:
-    """Recursively convert numpy and torch types to Python native types"""
+                                                                          
     if isinstance(obj, (np.integer, np.floating)):
         return obj.item()
     elif isinstance(obj, np.ndarray):
@@ -42,7 +42,7 @@ def convert_to_native_types(obj: Any) -> Any:
         return obj
 
 class RhetoricalAnalyzer:
-    """Rhetorical Analyzer - Detect rhetorical devices and emotional tendencies in text"""
+                                                                                          
     
     def __init__(self):
         try:
@@ -52,8 +52,8 @@ class RhetoricalAnalyzer:
             self.nlp = None
     
     def analyze_emotional_language(self, text: str) -> Dict:
-        """Analyze emotional language features"""
-        # Emotional vocabulary database
+                                                 
+                                       
         emotional_words = {
             'positive': ['amazing', 'incredible', 'fantastic', 'wonderful', 'brilliant', 'outstanding'],
             'negative': ['terrible', 'horrible', 'awful', 'disgusting', 'shocking', 'appalling'],
@@ -67,12 +67,12 @@ class RhetoricalAnalyzer:
         
         for emotion, words in emotional_words.items():
             score = sum(text_lower.count(word) for word in words)
-            emotional_scores[emotion] = score / len(text.split())  # Normalized
+            emotional_scores[emotion] = score / len(text.split())              
         
         return emotional_scores
     
     def detect_loaded_language(self, text: str) -> Dict:
-        """Detect loaded language (words with strong bias)"""
+                                                             
         loaded_patterns = {
             'conspiracy': [r'\b(conspiracy|plot|cover.?up|secret|hidden)\b', r'\b(they|them)\b.*\b(hide|conceal)\b'],
             'urgency': [r'\b(urgent|immediate|breaking|shocking|alarming)\b', r'\b(now|immediately|asap)\b'],
@@ -93,7 +93,7 @@ class RhetoricalAnalyzer:
         return loaded_scores
     
     def analyze_readability(self, text: str) -> Dict:
-        """Analyze text readability features"""
+                                               
         try:
             return {
                 'flesch_reading_ease': flesch_reading_ease(text),
@@ -112,21 +112,21 @@ class RhetoricalAnalyzer:
             }
     
     def detect_linguistic_patterns(self, text: str) -> Dict:
-        """Detect linguistic pattern features"""
+                                                
         if not self.nlp:
             return {}
         
         doc = self.nlp(text)
         
-        # Named entity analysis
+                               
         entities = [ent.label_ for ent in doc.ents]
         entity_counts = Counter(entities)
         
-        # POS tagging analysis
+                              
         pos_tags = [token.pos_ for token in doc]
         pos_counts = Counter(pos_tags)
         
-        # Syntactic complexity
+                              
         complex_sentences = 0
         for sent in doc.sents:
             if len([token for token in sent if token.dep_ in ['nsubj', 'dobj', 'pobj']]) > 3:
@@ -141,7 +141,7 @@ class RhetoricalAnalyzer:
         }
     
     def analyze_text(self, text: str) -> Dict:
-        """Comprehensive rhetorical analysis"""
+                                               
         return {
             'emotional_language': self.analyze_emotional_language(text),
             'loaded_language': self.detect_loaded_language(text),
@@ -150,7 +150,7 @@ class RhetoricalAnalyzer:
         }
 
 class DetectorFusion:
-    """Detector fusion module"""
+                                
     
     def __init__(self):
         self.fusion_model = None
@@ -158,15 +158,15 @@ class DetectorFusion:
         self.feature_names = []
     
     def extract_fusion_features(self, baseline_results: Dict, rhetorical_features: Dict) -> np.ndarray:
-        """Extract fusion features from baseline results and rhetorical features"""
+                                                                                   
         features = []
         feature_names = []
         
-        # Baseline detection features
+                                     
         text_detection = baseline_results.get('text_detection', {})
         multimodal_detection = baseline_results.get('multimodal_detection', {})
         
-        # RoBERTa features
+                          
         if 'roberta' in text_detection and 'error' not in text_detection['roberta']:
             features.extend([
                 text_detection['roberta'].get('fake_score', 0.5),
@@ -174,16 +174,16 @@ class DetectorFusion:
             ])
             feature_names.extend(['roberta_fake_score', 'roberta_confidence'])
         
-        # DetectGPT features
+                            
         if 'detectgpt' in text_detection and 'error' not in text_detection['detectgpt']:
             is_generated_bool = text_detection['detectgpt'].get('is_generated', False)
             features.extend([
                 text_detection['detectgpt'].get('sensitivity', 0.0),
-                1.0 if is_generated_bool else 0.0  # Convert bool to float explicitly
+                1.0 if is_generated_bool else 0.0                                    
             ])
             feature_names.extend(['detectgpt_sensitivity', 'detectgpt_is_generated'])
         
-        # GLTR features
+                       
         if 'gltr' in text_detection and 'error' not in text_detection['gltr']:
             features.extend([
                 text_detection['gltr'].get('high_prob_ratio', 0.0),
@@ -191,7 +191,7 @@ class DetectorFusion:
             ])
             feature_names.extend(['gltr_high_prob_ratio', 'gltr_avg_probability'])
         
-        # Zero-shot features
+                            
         if 'zero_shot' in text_detection and 'error' not in text_detection['zero_shot']:
             features.extend([
                 text_detection['zero_shot'].get('fake_score', 0.5),
@@ -199,7 +199,7 @@ class DetectorFusion:
             ])
             feature_names.extend(['zero_shot_fake_score', 'zero_shot_confidence'])
         
-        # CLIP features
+                       
         if 'clip' in multimodal_detection and 'error' not in multimodal_detection['clip']:
             features.extend([
                 multimodal_detection['clip'].get('consistency_score', 0.5),
@@ -207,7 +207,7 @@ class DetectorFusion:
             ])
             feature_names.extend(['clip_consistency', 'clip_is_consistent'])
         
-        # Rhetorical features
+                             
         emotional = rhetorical_features.get('emotional_language', {})
         features.extend([
             emotional.get('positive', 0.0),
@@ -250,11 +250,11 @@ class DetectorFusion:
         return np.array(features).reshape(1, -1)
     
     def train_fusion_model(self, X: np.ndarray, y: np.ndarray):
-        """Train fusion model"""
-        # Standardize features
+                                
+                              
         X_scaled = self.scaler.fit_transform(X)
         
-        # Use Random Forest as fusion model
+                                           
         self.fusion_model = RandomForestClassifier(
             n_estimators=100,
             max_depth=10,
@@ -263,9 +263,9 @@ class DetectorFusion:
         self.fusion_model.fit(X_scaled, y)
     
     def predict_fusion(self, features: np.ndarray, baseline_results: Optional[Dict] = None) -> Dict:
-        """Use fusion model for prediction"""
+                                             
         if self.fusion_model is None:
-            # If no trained model, use simple weighted average
+                                                              
             return self._simple_weighted_fusion(features, baseline_results)
         
         features_scaled = self.scaler.transform(features)
@@ -280,10 +280,10 @@ class DetectorFusion:
         }
     
     def _simple_weighted_fusion(self, features: np.ndarray, baseline_results: Optional[Dict] = None) -> Dict:
-        """Random Forest-based fusion for improved fake news detection"""
+                                                                         
         features_flat = features.flatten()
         
-        # Get DetectGPT result directly from baseline_results (more reliable)
+                                                                             
         detectgpt_is_generated = False
         detectgpt_sensitivity = 0.0
         
@@ -294,60 +294,60 @@ class DetectorFusion:
                 detectgpt_is_generated = detectgpt_data.get('is_generated', False)
                 detectgpt_sensitivity = detectgpt_data.get('sensitivity', 0.0)
         
-        # Fallback to feature array if baseline_results not provided
+                                                                    
         if not baseline_results:
             detectgpt_is_generated = features_flat[3] if len(features_flat) > 3 else False
             detectgpt_sensitivity = features_flat[2] if len(features_flat) > 2 else 0.0
         
-        # Normalize features
+                            
         normalized_features = []
         for i, val in enumerate(features_flat):
-            # Normalize and validate
-            if val > 1 and val < 10:  # May be sensitivity metrics
+                                    
+            if val > 1 and val < 10:                              
                 val = min(val / 10.0, 1.0)
             
             if not (0 <= val <= 1):
-                val = 0.5  # Default to neutral
+                val = 0.5                      
             
             normalized_features.append(val)
         
-        # Use Random Forest for feature importance and scoring
+                                                              
         try:
             from sklearn.ensemble import RandomForestClassifier
             import numpy as np
             
-            # Feature importance weights (learned from training data if available)
-            # For now, use empirical weights based on feature effectiveness
+                                                                                  
+                                                                           
             feature_weights = np.array([
-                0.08,  # DetectGPT sensitivity
-                0.05,  # DetectGPT other feature
-                0.50,  # GPT-4 detection (most important - 50%)
-                0.02,  # Zero-shot result
-                0.05,  # RoBERTa score
-                0.05,  # Rhetorical features
-                0.05,  # Consistency features
-                0.10,  # Tavily verification
-                0.02,  # Additional features
-                0.03,  # Cross-modal features
-                0.02,  # Sentiment features
-                0.03   # Other features
+                0.08,                         
+                0.05,                           
+                0.50,                                          
+                0.02,                    
+                0.05,                 
+                0.05,                       
+                0.05,                        
+                0.10,                       
+                0.02,                       
+                0.03,                        
+                0.02,                      
+                0.03                   
             ])
             
-            # Normalize weights to sum to 1
+                                           
             feature_weights = feature_weights / feature_weights.sum()
             
-            # Apply weights to features
+                                       
             weighted_score = np.sum(np.array(normalized_features[:len(feature_weights)]) * feature_weights)
             
         except ImportError:
-            # Fallback to simple weighted fusion if sklearn not available
+                                                                         
             core_detection_features = []
             rhetorical_features = []
             
             for i, val in enumerate(normalized_features):
                 if i < 8:
-                    if i == 2 or i == 3:  # DetectGPT features
-                        core_detection_features.extend([val, val])  # Add twice for 2x weight
+                    if i == 2 or i == 3:                      
+                        core_detection_features.extend([val, val])                           
                     else:
                         core_detection_features.append(val)
                 else:
@@ -365,31 +365,31 @@ class DetectorFusion:
             
             weighted_score = 0.8 * core_score + 0.2 * rhetorical_score
         
-        # AI generation detection using BOTH sensitivity and is_generated
-        # Balanced approach to reduce both false positives and false negatives
+                                                                         
+                                                                              
         
         ai_detected = False
         ai_bonus = 0.0
         
-        # Strategy: Use sensitivity with graduated bonus
-        # Based on testing: typical range is 3.5-4.5
-        if detectgpt_sensitivity > 5.0:  # Extremely high - very confident
-            ai_bonus = 0.20  # Add 20%
+                                                        
+                                                    
+        if detectgpt_sensitivity > 5.0:  
+            ai_bonus = 0.20  
             ai_detected = True
-        elif detectgpt_sensitivity > 4.2:  # High - likely AI
-            ai_bonus = 0.12  # Add 12%
+        elif detectgpt_sensitivity > 4.2:  
+            ai_bonus = 0.12  
             ai_detected = True
-        elif detectgpt_sensitivity > 3.8:  # Moderate - possibly AI
-            ai_bonus = 0.08  # Add 8%
-            ai_detected = False  # Don't definitively flag
-        elif detectgpt_sensitivity > 3.5:  # Low-moderate - slight suspicion
-            ai_bonus = 0.04  # Add 4%
+        elif detectgpt_sensitivity > 3.8: 
+            ai_bonus = 0.08 
+            ai_detected = False  
+        elif detectgpt_sensitivity > 3.5:  
+            ai_bonus = 0.04 
             ai_detected = False
         
         if ai_bonus > 0:
             weighted_score = min(1.0, weighted_score + ai_bonus)
         
-        # Limit to reasonable range
+                                   
         weighted_score = max(0.0, min(1.0, weighted_score))
         
         return {
@@ -398,21 +398,21 @@ class DetectorFusion:
             'confidence': abs(weighted_score - 0.5) * 2,
             'method': 'random_forest_fusion',
             'ai_generated_detected': ai_detected,
-            'detectgpt_is_generated_value': float(detectgpt_is_generated),  # Debug info
+            'detectgpt_is_generated_value': float(detectgpt_is_generated),              
             'num_features_used': len(normalized_features)
         }
 
 class CrossModalChecker:
-    """Cross-modal consistency checker"""
+                                         
     
     def __init__(self):
         self.consistency_threshold = 0.3
     
     def check_temporal_consistency(self, text: str, image_metadata: Optional[Dict] = None) -> Dict:
-        """Check temporal consistency with enhanced historical accuracy checking"""
-        # Extract time information from text
+                                                                                   
+                                            
         time_patterns = [
-            r'\b(\d{4})\b',  # Year
+            r'\b(\d{4})\b',        
             r'\b(january|february|march|april|may|june|july|august|september|october|november|december)\b',
             r'\b(today|yesterday|tomorrow|now|recently|lately)\b'
         ]
@@ -422,7 +422,7 @@ class CrossModalChecker:
             matches = re.findall(pattern, text.lower())
             text_times.extend(matches)
         
-        # Enhanced rule-based checking
+                                      
         current_year = 2025
         year_matches = [int(t) for t in text_times if t.isdigit() and len(t) == 4]
         
@@ -430,38 +430,38 @@ class CrossModalChecker:
         temporal_issues = []
         
         if year_matches:
-            # Check for future years
+                                    
             future_years = [y for y in year_matches if y > current_year + 1]
             if future_years:
-                temporal_score -= 0.4  # Increased penalty for future dates
+                temporal_score -= 0.4                                      
                 temporal_issues.append(f'future_years: {future_years}')
             
-            # Check for modern era mismatches (1800-present for modern structures/events)
-            # Enhanced detection for historical impossibilities
-            very_old_years = [y for y in year_matches if y < 1500]  # Medieval or earlier
-            old_years = [y for y in year_matches if 1500 <= y < 1800]  # Early modern
-            recent_past = [y for y in year_matches if 1800 <= y < current_year - 50]  # Modern history
+                                                                                         
+                                                               
+            very_old_years = [y for y in year_matches if y < 1500]                       
+            old_years = [y for y in year_matches if 1500 <= y < 1800]                
+            recent_past = [y for y in year_matches if 1800 <= y < current_year - 50]                  
             
-            # Detect context keywords to determine if old dates make sense
+                                                                          
             modern_keywords = ['tower', 'building', 'constructed', 'built', 'completed', 
                              'technology', 'internet', 'computer', 'phone', 'car', 'airplane']
             has_modern_context = any(keyword in text.lower() for keyword in modern_keywords)
             
             if very_old_years and has_modern_context:
-                # Medieval dates (before 1500) with modern context = highly suspicious
-                temporal_score -= 0.9  # EXTREME penalty for obvious anachronisms
+                                                                                      
+                temporal_score -= 0.9                                            
                 temporal_issues.append(f'anachronism_detected: {very_old_years} with modern context')
                 logger.warning(f"EXTREME temporal inconsistency: years {very_old_years} with modern keywords")
             elif very_old_years:
-                # Medieval dates without modern context - still suspicious for news
+                                                                                   
                 temporal_score -= 0.5
                 temporal_issues.append(f'medieval_years: {very_old_years}')
             elif old_years and has_modern_context:
-                # Early modern dates (1500-1800) with modern structures
-                temporal_score -= 0.5  # Strong penalty
+                                                                       
+                temporal_score -= 0.5                  
                 temporal_issues.append(f'historical_mismatch: {old_years}')
             elif recent_past:
-                # Older dates might be legitimate historical references
+                                                                       
                 temporal_score -= 0.1
                 temporal_issues.append(f'historical_reference: {recent_past}')
         
@@ -473,8 +473,8 @@ class CrossModalChecker:
         }
     
     def check_spatial_consistency(self, text: str, image_metadata: Optional[Dict] = None) -> Dict:
-        """Check spatial consistency"""
-        # Simple location extraction (can be extended to more complex NER)
+                                       
+                                                                          
         location_patterns = [
             r'\b([A-Z][a-z]+ (?:(?:City|Town|State|Country|Nation)))\b',
             r'\b(in|at|from|to) ([A-Z][a-z]+)\b'
@@ -485,9 +485,9 @@ class CrossModalChecker:
             matches = re.findall(pattern, text)
             locations.extend([match[1] if isinstance(match, tuple) else match for match in matches])
         
-        # Location consistency check (simplified version)
+                                                         
         location_consistency = 1.0
-        if len(set(locations)) > 3:  # Too many different locations may be suspicious
+        if len(set(locations)) > 3:                                                  
             location_consistency -= 0.2
         
         return {
@@ -497,8 +497,8 @@ class CrossModalChecker:
         }
     
     def check_logical_consistency(self, text: str) -> Dict:
-        """Check logical consistency"""
-        # Detect contradictory statements
+                                       
+                                         
         contradiction_patterns = [
             (r'\b(not|no|never|none)\b.*\b(always|all|every|everyone)\b', 'negation_contradiction'),
             (r'\b(before|after)\b.*\b(before|after)\b', 'temporal_contradiction'),
@@ -519,12 +519,12 @@ class CrossModalChecker:
         }
     
     def comprehensive_consistency_check(self, text: str, image_metadata: Optional[Dict] = None) -> Dict:
-        """Comprehensive consistency check"""
+                                             
         temporal = self.check_temporal_consistency(text, image_metadata)
         spatial = self.check_spatial_consistency(text, image_metadata)
         logical = self.check_logical_consistency(text)
         
-        # Calculate overall consistency score
+                                             
         overall_score = (
             temporal['temporal_consistency_score'] * 0.3 +
             spatial['spatial_consistency_score'] * 0.3 +
@@ -540,14 +540,14 @@ class CrossModalChecker:
         }
 
 class ImprovedDetection:
-    """Improved detection main class"""
+                                       
     
     def __init__(self, use_tavily: bool = True):
         self.rhetorical_analyzer = RhetoricalAnalyzer()
         self.detector_fusion = DetectorFusion()
         self.cross_modal_checker = CrossModalChecker()
         
-        # Use Tavily verifier only
+                                  
         self.verifier_type = 'tavily'
         self.verifier = None
         
@@ -563,53 +563,63 @@ class ImprovedDetection:
             self.verifier = None
     
     def improved_detection(self, baseline_results: Dict, text: str, image_metadata: Optional[Dict] = None, detection_config: Optional[Dict] = None) -> Dict:
-        """Execute improved detection with fact verification and customizable configuration"""
+                                                                                              
         
-        # Parse configuration
+                             
         config = detection_config or {}
-        use_verification = config.get('use_wikipedia', True)  # Keep 'use_wikipedia' key for backward compatibility
+        use_verification = config.get('use_wikipedia', True)                                                       
         use_rhetorical = config.get('use_rhetorical', True)
         use_consistency = config.get('use_consistency', True)
         threshold = config.get('threshold', 0.5)
-        tavily_weight = config.get('wikipedia_weight', 1.0)  # Keep 'wikipedia_weight' key for backward compatibility
+        tavily_weight = config.get('wikipedia_weight', 1.0)                                                          
         
         logger.info(f"Detection config: Verification={use_verification}, Rhetorical={use_rhetorical}, Consistency={use_consistency}, Threshold={threshold}, Tavily_Weight={tavily_weight}")
         
 
         tavily_verification = {}
-        if self.verifier and use_verification:  # Check if verification is enabled
+        if self.verifier and use_verification:                                               
             try:
                 logger.info(f"🔍 [FAST PATH] Performing fact pre-verification using {self.verifier_type}...")
-                # Timeout control (cross-platform compatible)
+                                       
                 import platform
                 import threading
                 
-                quick_score = 0.5  # Default score
+                verification_result = None
+                quick_score = 0.5                      
                 timeout_occurred = [False]
                 
                 if platform.system() == 'Windows':
-                    # Windows doesn't support signal.SIGALRM, use threading.Timer
+                                                                                 
                     def call_with_timeout():
-                        nonlocal quick_score
+                        nonlocal verification_result, quick_score
                         try:
-                            quick_score = self.verifier.quick_check(text)
+                            import spacy
+                            import nltk
+                            nlp = spacy.load("en_core_web_sm")
+                            doc = nlp(text[:500])
+                            entities = [ent.text for ent in doc.ents[:5]]
+                            sentences = nltk.sent_tokenize(text[:500])
+                            claims = sentences[:3]
+                            verification_result = self.verifier.comprehensive_verification(text, entities, claims)
+                            quick_score = verification_result.get('verification_score', 0.5)
                         except Exception as e:
                             logger.error(f"Tavily verification failed: {e}")
                             quick_score = 0.5
+                            verification_result = None
                         finally:
                             timeout_occurred[0] = False
                     
                     thread = threading.Thread(target=call_with_timeout)
                     thread.daemon = True
                     thread.start()
-                    thread.join(timeout=10.0)  # 10 second timeout
+                    thread.join(timeout=10.0)                     
                     
                     if thread.is_alive():
                         logger.warning("⚠️ Tavily verification timeout (>10s)")
                         timeout_occurred[0] = True
                         quick_score = 0.5
                 else:
-                    # Unix systems (Linux, macOS) can use signal.SIGALRM
+                                                       
                     import signal
                     
                     def timeout_handler(signum, frame):
@@ -617,26 +627,51 @@ class ImprovedDetection:
                         raise TimeoutError("Fact verification timeout")
                     
                     signal.signal(signal.SIGALRM, timeout_handler)
-                    signal.alarm(10)  # 10秒超时
+                    signal.alarm(10)                   
                     
                     try:
-                        quick_score = self.verifier.quick_check(text)
+                        import spacy
+                        import nltk
+                        nlp = spacy.load("en_core_web_sm")
+                        doc = nlp(text[:500])
+                        entities = [ent.text for ent in doc.ents[:5]]
+                        sentences = nltk.sent_tokenize(text[:500])
+                        claims = sentences[:3]
+                        verification_result = self.verifier.comprehensive_verification(text, entities, claims)
+                        quick_score = verification_result.get('verification_score', 0.5)
                     except TimeoutError:
                         logger.warning("⚠️ Tavily verification timeout (>10s)")
                         quick_score = 0.5
+                        verification_result = None
                     finally:
-                        signal.alarm(0)  # 取消超时
+                        signal.alarm(0)
                 
-                tavily_verification = {
-                    'overall_score': quick_score,
-                    'tavily_coverage': 1.0 if quick_score > 0.5 else 0.5,
-                    'wikipedia_coverage': 1.0 if quick_score > 0.5 else 0.5,  # Keep for backward compatibility
-                    'entities_found': 1,
-                    'entities_checked': 1,
-                    'claims_verified': 1 if quick_score > 0.7 else 0,
-                    'claims_checked': 1,
-                    'provider': 'tavily'
-                }
+                if verification_result:
+                    tavily_verification = {
+                        'overall_score': verification_result.get('verification_score', quick_score),
+                        'tavily_coverage': verification_result.get('entity_coverage', quick_score),
+                        'wikipedia_coverage': verification_result.get('entity_coverage', quick_score),
+                        'entities_found': verification_result.get('entities_found', 0),
+                        'entities_checked': verification_result.get('entities_checked', 0),
+                        'claims_verified': verification_result.get('claims_verified', 0),
+                        'claims_checked': verification_result.get('claims_checked', 0),
+                        'entity_results': verification_result.get('entity_results', []),
+                        'claim_results': verification_result.get('claim_results', []),
+                        'provider': 'tavily'
+                    }
+                else:
+                    tavily_verification = {
+                        'overall_score': quick_score,
+                        'tavily_coverage': 1.0 if quick_score > 0.5 else 0.5,
+                        'wikipedia_coverage': 1.0 if quick_score > 0.5 else 0.5,                                   
+                        'entities_found': 1,
+                        'entities_checked': 1,
+                        'claims_verified': 1 if quick_score > 0.7 else 0,
+                        'claims_checked': 1,
+                        'entity_results': [],
+                        'claim_results': [],
+                        'provider': 'tavily'
+                    }
                 
                 tavily_score = tavily_verification.get('overall_score', 0.0)
                 tavily_coverage = tavily_verification.get('tavily_coverage', 0.0)
@@ -646,18 +681,18 @@ class ImprovedDetection:
                 entities_found = verification_summary.get('entities_found', tavily_verification.get('entities_found', 0))
                 total_entities = verification_summary.get('total_entities_checked', tavily_verification.get('entities_checked', 1))
                 
-                # Get verifier name for logging
+                                               
                 verifier_name = tavily_verification.get('provider', self.verifier_type).title()
                 
                 logger.info(f"📊 {verifier_name} Score: {tavily_score:.3f}, Coverage: {tavily_coverage:.3f}, "
                            f"Claims: {claims_verified}/{total_claims}, Entities: {entities_found}/{total_entities}")
                 
-                # 🎯 FAST PATH CONDITION: High verification = likely REAL news
-                # If verifier strongly supports the content, skip expensive model analysis
+                                                                             
+                                                                                          
                 claims_ratio = claims_verified / total_claims if total_claims > 0 else 0.0
                 entities_ratio = entities_found / total_entities if total_entities > 0 else 0.0
                 
-                # Strict criteria for fast path: HIGH verification across all metrics
+                                                                                     
                 if (tavily_score >= 0.75 and tavily_coverage >= 0.65 and 
                     claims_ratio >= 0.75 and entities_ratio >= 0.70 and
                     total_claims >= 2 and total_entities >= 2):
@@ -667,8 +702,8 @@ class ImprovedDetection:
                                f"Score: {tavily_score:.3f}, Coverage: {tavily_coverage:.3f}, "
                                f"Claims: {claims_verified}/{total_claims}, Entities: {entities_found}/{total_entities}")
                     
-                    # Generate fast path result (skip expensive baseline detection)
-                    fast_fake_prob = max(0.0, 0.15 - (tavily_score - 0.75) * 0.3)  # Very low fake probability
+                                                                                   
+                    fast_fake_prob = max(0.0, 0.15 - (tavily_score - 0.75) * 0.3)                             
                     
                     fast_result = {
                         'baseline_results': baseline_results,
@@ -680,9 +715,9 @@ class ImprovedDetection:
                             'method': 'tavily_fast_path'
                         },
                         'fact_verification': baseline_results.get('fact_verification', {}),
-                        'wikipedia_verification': tavily_verification,  # Keep for backward compatibility
+                        'wikipedia_verification': tavily_verification,                                   
                         'tavily_verification': tavily_verification,
-                        'fast_path': True,  # Flag to indicate fast path was used
+                        'fast_path': True,                                       
                         'final_prediction': {
                             'prediction': 'real',
                             'fake_probability': fast_fake_prob,
@@ -691,15 +726,15 @@ class ImprovedDetection:
                                 'base_fusion_score': fast_fake_prob,
                                 'consistency_adjustment': 0.0,
                                 'rhetorical_adjustment': 0.0,
-                                'wikipedia_adjustment': 0.0,  # Keep for backward compatibility
+                                'wikipedia_adjustment': 0.0,                                   
                                 'tavily_adjustment': 0.0,
-                                'wikipedia_boost': -(0.35 + (tavily_score - 0.75) * 0.4),  # Keep for backward compatibility
+                                'wikipedia_boost': -(0.35 + (tavily_score - 0.75) * 0.4),                                   
                                 'tavily_boost': -(0.35 + (tavily_score - 0.75) * 0.4),
                                 'final_score': fast_fake_prob,
                                 'confidence': 0.90,
                                 'key_factors': [f'high_{self.verifier_type}_verification', f'{self.verifier_type}_fast_path'],
                                 'fast_path_reason': f'Tavily verification very high (score: {tavily_score:.2%}, coverage: {tavily_coverage:.2%}, claims: {claims_verified}/{total_claims}, entities: {entities_found}/{total_entities})',
-                                'wikipedia_details': {  # Keep for backward compatibility
+                                'wikipedia_details': {                                   
                                     'verification_score': tavily_score,
                                     'coverage': tavily_coverage,
                                     'entities_found': entities_found,
@@ -719,7 +754,7 @@ class ImprovedDetection:
                         }
                     }
                     
-                    # Generate detailed report for fast path too
+                                                                
                     fast_result['detailed_report'] = self._generate_detailed_report(
                         text, fast_result, tavily_verification, {}, {}
                     )
@@ -738,10 +773,10 @@ class ImprovedDetection:
                 logger.error(f"{self.verifier_type.title()} verification failed: {e}")
                 tavily_verification = {'error': str(e), 'overall_score': 0.0, 'provider': self.verifier_type, 'tavily_coverage': 0.0, 'wikipedia_coverage': 0.0}
         
-        # ========== NORMAL PATH: Full Analysis (if fact verification is low/inconclusive) ==========
+                                                                                                     
         logger.info("🔄 [NORMAL PATH] Performing comprehensive detection analysis...")
         
-        # 1. Rhetorical analysis (optional)
+                                           
         if use_rhetorical:
             rhetorical_features = self.rhetorical_analyzer.analyze_text(text)
             logger.info("✅ Rhetorical analysis enabled")
@@ -749,7 +784,7 @@ class ImprovedDetection:
             rhetorical_features = {}
             logger.info("⏭️ Rhetorical analysis skipped by user config")
         
-        # 2. Cross-modal consistency check (optional)
+                                                     
         if use_consistency:
             consistency_check = self.cross_modal_checker.comprehensive_consistency_check(text, image_metadata)
             logger.info("✅ Consistency check enabled")
@@ -757,37 +792,37 @@ class ImprovedDetection:
             consistency_check = {'overall_consistency_score': 1.0, 'temporal_consistency': {'temporal_consistency_score': 1.0}}
             logger.info("⏭️ Consistency check skipped by user config")
         
-        # 3. Detector fusion
+                            
         fusion_features = self.detector_fusion.extract_fusion_features(baseline_results, rhetorical_features)
         fusion_result = self.detector_fusion.predict_fusion(fusion_features, baseline_results)
         
-        # 4. Fact verification (from baseline_results)
+                                                      
         fact_verification = baseline_results.get('fact_verification', {})
         
-        # 6. Comprehensive results
+                                  
         improved_result = {
             'baseline_results': baseline_results,
             'rhetorical_analysis': rhetorical_features,
             'consistency_check': consistency_check,
             'fusion_result': fusion_result,
-            'fact_verification': fact_verification,  # Added
-            'wikipedia_verification': tavily_verification,  # Keep for backward compatibility
-            'tavily_verification': tavily_verification,  # Fact checking (Tavily)
-            'fast_path': False,  # Flag to indicate normal path was used
+            'fact_verification': fact_verification,         
+            'wikipedia_verification': tavily_verification,                                   
+            'tavily_verification': tavily_verification,                          
+            'fast_path': False,                                         
             'final_prediction': self._generate_final_prediction(
                 fusion_result, 
                 consistency_check, 
                 rhetorical_features,
-                fact_verification,  # Added
-                tavily_verification,  # Tavily verification results
-                tavily_weight,  # User-defined weight
-                threshold,  # User-defined threshold
-                text  # Original text for analysis
+                fact_verification,         
+                tavily_verification,                               
+                tavily_weight,                       
+                threshold,                          
+                text                              
             )
         }
         
-        # Convert all numpy types to Python native types
-        # Generate detailed report with highlighted issues
+                                                        
+                                                          
         improved_result['detailed_report'] = self._generate_detailed_report(
             text, improved_result, tavily_verification, rhetorical_features, consistency_check
         )
@@ -798,7 +833,7 @@ class ImprovedDetection:
                                  tavily_verification: Optional[Dict] = None,
                                  rhetorical_features: Optional[Dict] = None,
                                  consistency_check: Optional[Dict] = None) -> Dict:
-        """Generate detailed detection report with highlighted issues"""
+                                                                        
         import re
         from datetime import datetime
         
@@ -807,18 +842,18 @@ class ImprovedDetection:
             'overall_assessment': detection_result.get('final_prediction', {}).get('prediction', 'unknown'),
             'fake_probability': detection_result.get('final_prediction', {}).get('fake_probability', 0.0),
             'confidence': detection_result.get('final_prediction', {}).get('confidence', 0.0),
-            'highlighted_text': text,  # Will be modified with highlights
+            'highlighted_text': text,                                    
             'issues_found': [],
             'recommendations': [],
             'detailed_analysis': {}
         }
         
-        # Highlight fact verification issues
+                                            
         if tavily_verification:
             tavily_issues = self._highlight_tavily_issues(text, tavily_verification)
             report['issues_found'].extend(tavily_issues['issues'])
             report['highlighted_text'] = tavily_issues['highlighted_text']
-            report['detailed_analysis']['wikipedia_verification'] = {  # Keep for backward compatibility
+            report['detailed_analysis']['wikipedia_verification'] = {                                   
                 'score': tavily_verification.get('overall_score', 0.0),
                 'coverage': tavily_verification.get('tavily_coverage', tavily_verification.get('wikipedia_coverage', 0.0)),
                 'entities_found': tavily_verification.get('verification_summary', {}).get('entities_found', 0),
@@ -833,7 +868,7 @@ class ImprovedDetection:
                 'issues': tavily_issues['issues']
             }
         
-        # Highlight rhetorical issues
+                                     
         if rhetorical_features:
             rhetorical_issues = self._highlight_rhetorical_issues(text, rhetorical_features)
             report['issues_found'].extend(rhetorical_issues['issues'])
@@ -845,7 +880,7 @@ class ImprovedDetection:
                 'issues': rhetorical_issues['issues']
             }
         
-        # Highlight consistency issues
+                                      
         if consistency_check:
             consistency_issues = self._highlight_consistency_issues(text, consistency_check)
             report['issues_found'].extend(consistency_issues['issues'])
@@ -858,24 +893,24 @@ class ImprovedDetection:
                 'issues': consistency_issues['issues']
             }
         
-        # Extract problematic sentences (include model detection results)
+                                                                         
         all_issues = report['issues_found'].copy()
         
-        # Check if text quality is too poor (likely parsing errors)
+                                                                   
         text_quality_score = self._assess_text_quality(text)
-        if text_quality_score < 0.3:  # Very poor quality, likely parsing errors
-            # Reduce verification-related issues for poor quality text
+        if text_quality_score < 0.3:                                            
+                                                                      
             all_issues = [issue for issue in all_issues if not issue.get('type', '').startswith('unverified_')]
             report['text_quality_warning'] = 'Text appears to have parsing issues, fact verification reduced'
         
-        # Add model detection results if available
+                                                  
         if 'baseline_results' in detection_result:
             baseline = detection_result['baseline_results']
             if 'text_detection' in baseline:
                 for model_name, model_result in baseline['text_detection'].items():
                     if isinstance(model_result, dict) and 'fake_score' in model_result:
                         fake_score = model_result['fake_score']
-                        if fake_score > 0.4:  # Medium fake probability threshold
+                        if fake_score > 0.4:                                     
                             all_issues.append({
                                 'type': 'model_detection',
                                 'description': f'{model_name} model detected high fake probability ({fake_score:.1%})',
@@ -884,16 +919,16 @@ class ImprovedDetection:
         
         report['problematic_sentences'] = self._extract_problematic_sentences(text, all_issues)
         
-        # Generate recommendations
+                                  
         report['recommendations'] = self._generate_recommendations(report['issues_found'], report['fake_probability'])
         
         return report
     
     def _assess_text_quality(self, text: str) -> float:
-        """Assess text quality to detect parsing errors or malformed content"""
+                                                                               
         import re
         
-        # Check for indicators of poor text quality
+                                                   
         quality_indicators = {
             'excessive_fragments': 0,
             'navigation_elements': 0,
@@ -902,58 +937,58 @@ class ImprovedDetection:
             'poor_sentence_structure': 0
         }
         
-        # Count very short fragments (likely parsing errors)
+                                                            
         fragments = re.split(r'[.!?]+', text)
         short_fragments = sum(1 for f in fragments if len(f.strip()) < 10)
         quality_indicators['excessive_fragments'] = min(short_fragments / len(fragments), 1.0)
         
-        # Check for navigation elements
+                                       
         nav_indicators = ['shopping', 'entertainment', 'explore more', 'final hours']
         quality_indicators['navigation_elements'] = sum(1 for indicator in nav_indicators if indicator.lower() in text.lower()) / len(nav_indicators)
         
-        # Check for website names
+                                 
         website_pattern = r'\w+\.(?:com|au|org|net)'
         websites = re.findall(website_pattern, text, re.IGNORECASE)
-        quality_indicators['website_names'] = min(len(websites) / 5, 1.0)  # Normalize
+        quality_indicators['website_names'] = min(len(websites) / 5, 1.0)             
         
-        # Check for mixed content (too many different topics)
+                                                             
         topics = ['kfc', 'crypto', 'prince', 'nrl', 'shopping']
         topic_count = sum(1 for topic in topics if topic.lower() in text.lower())
         quality_indicators['mixed_content'] = min(topic_count / 3, 1.0)
         
-        # Check sentence structure
+                                  
         sentences = re.split(r'[.!?]+', text)
         avg_sentence_length = sum(len(s.strip()) for s in sentences) / len(sentences) if sentences else 0
         quality_indicators['poor_sentence_structure'] = 1.0 if avg_sentence_length < 30 else 0.0
         
-        # Calculate overall quality score (lower = worse quality)
+                                                                 
         quality_score = 1.0 - (sum(quality_indicators.values()) / len(quality_indicators))
         return max(0.0, min(1.0, quality_score))
     
     def _extract_problematic_sentences(self, text: str, issues: List[Dict]) -> List[Dict]:
-        """Extract sentences that contain problematic content with explanations"""
+                                                                                  
         import re
         
-        # Improved sentence splitting - handle common abbreviations and URLs
-        # Split on sentence endings but avoid splitting on abbreviations, URLs, decimals, etc.
+                                                                            
+                                                                                              
         sentence_pattern = r'(?<!\.)\s*[.!?]+\s+(?![a-z]|\d+\.\d+)'
         sentences = re.split(sentence_pattern, text)
-        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]  # Filter out very short fragments
+        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]                                   
         
         problematic_sentences = []
         
-        # Process fact verification and rhetorical issues
+                                                         
         for issue in issues:
             issue_type = issue.get('type', '')
             description = issue.get('description', '')
             
-            # Find sentences that contain the problematic content
+                                                                 
             for i, sentence in enumerate(sentences):
                 if self._sentence_contains_issue(sentence, issue):
-                    # Skip very short sentences or fragments that are likely parsing errors
+                                                                                           
                     if len(sentence.strip()) < 20:
                         continue
-                    # Skip sentences that look like website names or navigation elements
+                                                                                        
                     if any(indicator in sentence.lower() for indicator in ['.com', '.au', 'shopping', 'entertainment']):
                         continue
                         
@@ -965,15 +1000,15 @@ class ImprovedDetection:
                         'severity': self._get_issue_severity(issue_type)
                     })
         
-        # Add model detection issues for high fake probability
+                                                              
         fake_prob = 0.0
         for issue in issues:
             if 'fake_probability' in issue:
                 fake_prob = max(fake_prob, issue['fake_probability'])
         
-        if fake_prob > 0.7:  # High fake probability
+        if fake_prob > 0.7:                         
             for i, sentence in enumerate(sentences):
-                if len(sentence) > 20:  # Only flag substantial sentences
+                if len(sentence) > 20:                                   
                     problematic_sentences.append({
                         'sentence': sentence,
                         'sentence_number': i + 1,
@@ -982,7 +1017,7 @@ class ImprovedDetection:
                         'severity': 'High'
                     })
         
-        # Remove duplicates and sort by sentence number
+                                                       
         seen_sentences = set()
         unique_sentences = []
         for ps in problematic_sentences:
@@ -993,44 +1028,44 @@ class ImprovedDetection:
         return sorted(unique_sentences, key=lambda x: x['sentence_number'])
     
     def _sentence_contains_issue(self, sentence: str, issue: Dict) -> bool:
-        """Check if a sentence contains the problematic content"""
+                                                                  
         issue_type = issue.get('type', '')
         description = issue.get('description', '')
         
-        # Check for unverified entities
+                                       
         if issue_type == 'unverified_entity':
             entity = issue.get('entity', '')
             return entity.lower() in sentence.lower()
         
-        # Check for unverified claims
+                                     
         if issue_type == 'unverified_claim':
             claim = issue.get('claim', '')
             return claim.lower() in sentence.lower()
         
-        # Check for emotional language
+                                      
         if issue_type == 'emotional_language':
             emotional_words = ['shocking', 'devastating', 'incredible', 'amazing', 'terrible', 'horrible', 'fantastic', 'unbelievable']
             return any(word in sentence.lower() for word in emotional_words)
         
-        # Check for loaded language
+                                   
         if issue_type == 'loaded_language':
             loaded_words = ['obviously', 'clearly', 'undoubtedly', 'certainly', 'definitely']
             return any(word in sentence.lower() for word in loaded_words)
         
-        # Check for years (consistency issues)
+                                              
         if issue_type == 'year_inconsistency':
             import re
             years = re.findall(r'\b(18|19|20)\d{2}\b', sentence)
             return len(years) > 0
         
-        # Check for model detection issues
+                                          
         if issue_type == 'model_detection':
-            return True  # Model detection applies to all sentences when fake probability is high
+            return True                                                                          
         
         return False
     
     def _get_simple_reason(self, issue_type: str, description: str) -> str:
-        """Get simple reason for the issue"""
+                                             
         reasons = {
             'unverified_entity': 'Entity not found in fact verification',
             'unverified_claim': 'Unverified claim',
@@ -1047,7 +1082,7 @@ class ImprovedDetection:
         return reasons.get(issue_type, 'Potential issue detected')
     
     def _get_issue_severity(self, issue_type: str) -> str:
-        """Get severity level for the issue"""
+                                              
         severity_map = {
             'unverified_entity': 'Medium',
             'unverified_claim': 'High',
@@ -1064,11 +1099,11 @@ class ImprovedDetection:
         return severity_map.get(issue_type, 'Medium')
     
     def _highlight_tavily_issues(self, text: str, tavily_verification: Dict) -> Dict:
-        """Highlight fact verification issues in text"""
+                                                        
         issues = []
         highlighted_text = text
         
-        # Check for unverified entities
+                                       
         entity_results = tavily_verification.get('entity_results', [])
         for entity_result in entity_results:
             if not entity_result.get('found', False):
@@ -1085,7 +1120,7 @@ class ImprovedDetection:
                         'description': f'Entity "{entity}" not found in fact verification'
                     })
         
-        # Check for unverified claims
+                                     
         claim_results = tavily_verification.get('claim_results', [])
         for claim_result in claim_results:
             if not claim_result.get('verified', False):
@@ -1102,7 +1137,7 @@ class ImprovedDetection:
                         'description': f'Claim "{claim}" not verified by fact verification'
                     })
         
-        # Check for low verification scores
+                                           
         overall_score = tavily_verification.get('overall_score', 0.0)
         if overall_score < 0.6:
             issues.append({
@@ -1115,12 +1150,12 @@ class ImprovedDetection:
         return {'highlighted_text': highlighted_text, 'issues': issues}
     
     def _highlight_rhetorical_issues(self, text: str, rhetorical_features: Dict) -> Dict:
-        """Highlight rhetorical issues in text"""
+                                                 
         import re
         issues = []
         highlighted_text = text
         
-        # Check for emotional language - highlight emotional words
+                                                                  
         emotional_words = [
             'shocking', 'outrage', 'devastating', 'incredible', 'amazing', 'terrible',
             'horrible', 'fantastic', 'unbelievable', 'stunning', 'dramatic', 'explosive',
@@ -1145,7 +1180,7 @@ class ImprovedDetection:
                 'description': f'High emotional content: {emotional_lang}'
             })
         
-        # Check for loaded language - highlight biased words
+                                                            
         loaded_words = [
             'obviously', 'clearly', 'undoubtedly', 'certainly', 'definitely',
             'absolutely', 'completely', 'totally', 'entirely', 'wholly',
@@ -1169,10 +1204,10 @@ class ImprovedDetection:
                 'description': f'Potentially manipulative language: {loaded_lang}'
             })
         
-        # Check readability
+                           
         readability = rhetorical_features.get('readability', {})
         flesch_score = readability.get('flesch_reading_ease', 0)
-        if flesch_score < 30:  # Very difficult to read
+        if flesch_score < 30:                          
             issues.append({
                 'type': 'poor_readability',
                 'text': f'Readability score: {flesch_score}',
@@ -1183,12 +1218,12 @@ class ImprovedDetection:
         return {'highlighted_text': highlighted_text, 'issues': issues}
     
     def _highlight_consistency_issues(self, text: str, consistency_check: Dict) -> Dict:
-        """Highlight consistency issues in text"""
+                                                  
         import re
         issues = []
         highlighted_text = text
         
-        # Highlight years that might be inconsistent
+                                                    
         year_pattern = re.compile(r'\b(18|19|20)\d{2}\b')
         years = year_pattern.findall(text)
         if years:
@@ -1199,7 +1234,7 @@ class ImprovedDetection:
                     f'<span style="background-color: #e8f5e8; color: #2e7d32; padding: 2px 4px; border-radius: 3px; font-weight: bold; border: 1px solid #4caf50;">📅 {year}</span>'
                 )
         
-        # Check temporal issues
+                               
         temporal_issues = consistency_check.get('temporal_consistency', {}).get('temporal_issues', [])
         for issue in temporal_issues:
             issues.append({
@@ -1209,7 +1244,7 @@ class ImprovedDetection:
                 'description': f'Temporal inconsistency: {issue}'
             })
         
-        # Check spatial issues
+                              
         spatial_issues = consistency_check.get('spatial_consistency', {}).get('spatial_issues', [])
         for issue in spatial_issues:
             issues.append({
@@ -1219,7 +1254,7 @@ class ImprovedDetection:
                 'description': f'Spatial inconsistency: {issue}'
             })
         
-        # Check logical contradictions
+                                      
         logical_issues = consistency_check.get('logical_consistency', {}).get('detected_contradictions', [])
         for issue in logical_issues:
             issues.append({
@@ -1232,7 +1267,7 @@ class ImprovedDetection:
         return {'highlighted_text': highlighted_text, 'issues': issues}
     
     def _generate_recommendations(self, issues: List[Dict], fake_probability: float) -> List[str]:
-        """Generate recommendations based on detected issues"""
+                                                               
         recommendations = []
         
         if fake_probability > 0.7:
@@ -1242,7 +1277,7 @@ class ImprovedDetection:
         else:
             recommendations.append("✅ Low fake news probability - appears credible")
         
-        # Issue-specific recommendations
+                                        
         issue_types = [issue['type'] for issue in issues]
         
         if 'unverified_entity' in issue_types:
@@ -1277,128 +1312,128 @@ class ImprovedDetection:
                                    tavily_weight: float = 1.0,
                                    threshold: float = 0.5,
                                    text: str = "") -> Dict:
-        """Generate final prediction result with customizable parameters"""
-        # Base fusion score
+                                                                           
+                           
         base_fake_prob = fusion_result.get('fake_probability', 0.5)
         
-        # Consistency adjustment (ENHANCED: increased weight for temporal errors)
+                                                                                 
         consistency_score = consistency_check.get('overall_consistency_score', 0.5)
         temporal_score = consistency_check.get('temporal_consistency', {}).get('temporal_consistency_score', 1.0)
         
-        # Base consistency adjustment
-        consistency_adjustment = (1.0 - consistency_score) * 0.25  # Increased from 0.2 to 0.25
+                                     
+        consistency_adjustment = (1.0 - consistency_score) * 0.25                              
         
-        # Additional penalty for severe temporal inconsistencies
-        if temporal_score < 0.5:  # Severe temporal issues
-            temporal_penalty = (1.0 - temporal_score) * 0.25  # Increased to 25% penalty
+                                                                
+        if temporal_score < 0.5:                          
+            temporal_penalty = (1.0 - temporal_score) * 0.25                            
             consistency_adjustment += temporal_penalty
             logger.warning(f"SEVERE temporal penalty applied: +{temporal_penalty:.3f} (temporal_score: {temporal_score:.3f})")
         
-        # EXTREME penalty for anachronisms (medieval + modern context)
-        if temporal_score < 0.2:  # Extreme temporal issues (anachronisms)
-            extreme_penalty = 0.3  # Additional 30% penalty
+                                                                      
+        if temporal_score < 0.2:                                          
+            extreme_penalty = 0.3                          
             consistency_adjustment += extreme_penalty
             logger.warning(f"EXTREME temporal penalty applied: +{extreme_penalty:.3f} (anachronism detected)")
         
-        # Rhetorical feature adjustment
+                                       
         loaded_language = rhetorical_features.get('loaded_language', {})
-        rhetorical_adjustment = sum(loaded_language.values()) * 0.1  # Loaded language increases fake news probability
+        rhetorical_adjustment = sum(loaded_language.values()) * 0.1                                                   
         
-        # Tavily verification adjustment (ENHANCED)
+                                                   
         tavily_adjustment = 0.0
-        tavily_boost = 0.0  # Positive adjustment for high Tavily verification
-        contradiction_penalty = 0.0  # Extra penalty for extremely low Tavily verification
+        tavily_boost = 0.0                                                    
+        contradiction_penalty = 0.0                                                       
         
-        # Initialize Tavily scores to default values
+                                                    
         tavily_score = 0.0
         tavily_coverage = 0.0
         verifier_display_name = 'Tavily'
         
-        # OPTION A: Tavily weight (REDUCED from 0.45/0.30 to 0.20/0.15) - Apply user weight multiplier
+                                                                                                      
         if tavily_verification and 'overall_score' in tavily_verification:
-            # Low Tavily coverage/verification increases fake news probability
+                                                                              
             tavily_score = tavily_verification.get('overall_score', 0.0)
             tavily_coverage = tavily_verification.get('tavily_coverage', tavily_verification.get('wikipedia_coverage', 0.0))
             verifier_display_name = tavily_verification.get('provider', self.verifier_type).title()
             base_tavily_adjustment = (1.0 - tavily_score) * 0.20 + (1.0 - tavily_coverage) * 0.15
-            tavily_adjustment = base_tavily_adjustment * tavily_weight  # Apply user-defined weight
+            tavily_adjustment = base_tavily_adjustment * tavily_weight                             
             
-            # OPTION B: Extra penalty for low Tavily verification (REDUCED from 0.40 to 0.15) - Apply user weight multiplier
-            if tavily_score < 0.5 or tavily_coverage < 0.6:  # More lenient threshold (changed from 0.6/0.7 to 0.5/0.6)
-                base_contradiction_penalty = 0.15  # Reduced penalty for low verification (was 0.40)
-                contradiction_penalty = base_contradiction_penalty * tavily_weight  # Apply user-defined weight
+                                                                                                                            
+            if tavily_score < 0.5 or tavily_coverage < 0.6:                                                            
+                base_contradiction_penalty = 0.15                                                   
+                contradiction_penalty = base_contradiction_penalty * tavily_weight                             
                 logger.warning(f"TAVILY LOW VERIFICATION: +{contradiction_penalty:.2f} penalty (score: {tavily_score:.3f}, coverage: {tavily_coverage:.3f})")
             
-            # NEW: Check for Tavily contradictions (high coverage but potentially wrong facts)
-            if tavily_coverage >= 0.8 and tavily_score >= 0.7:  # High coverage and score
-                # Check if this might be a subtle fake news with wrong facts
+                                                                                              
+            if tavily_coverage >= 0.8 and tavily_score >= 0.7:                           
+                                                                            
                 claims_verified = tavily_verification.get('claims_verified', 0)
                 total_claims = tavily_verification.get('total_claims', 1)
                 claims_ratio = claims_verified / total_claims if total_claims > 0 else 0
                 
-                # If high Tavily coverage but low claims verification, it might be contradictory
-                if claims_ratio < 0.7:  # Less than 70% of claims verified (more lenient, was 0.8)
-                    contradiction_penalty += 0.15 * tavily_weight  # Reduced penalty (was 0.30)
+                                                                                                
+                if claims_ratio < 0.7:                                                            
+                    contradiction_penalty += 0.15 * tavily_weight                              
                     logger.warning(f"TAVILY POTENTIAL CONTRADICTION: +{0.15 * tavily_weight:.2f} penalty (coverage: {tavily_coverage:.3f}, claims_ratio: {claims_ratio:.3f})")
                 
-                # SPECIAL: Year contradiction detection for historical claims
-                # If text contains years and Tavily coverage is high, check for year contradictions
+                                                                             
+                                                                                                   
                 import re
                 years_in_text = re.findall(r'\b(18|19|20)\d{2}\b', text.lower())
-                if years_in_text and claims_ratio < 0.9:  # More lenient (was 1.0)
-                    contradiction_penalty += 0.15 * tavily_weight  # Reduced penalty (was 0.25)
+                if years_in_text and claims_ratio < 0.9:                          
+                    contradiction_penalty += 0.15 * tavily_weight                              
                     logger.warning(f"TAVILY YEAR CONTRADICTION DETECTED: +{0.15 * tavily_weight:.2f} penalty (years: {years_in_text}, claims_ratio: {claims_ratio:.3f})")
             
-            # NEW: If verification is high (≥50%), boost credibility (more lenient, was 0.6)
+                                                                                            
             if tavily_score >= 0.5:
-                # High verification significantly boosts credibility
-                tavily_boost = -0.30  # Increased boost (was -0.25)
+                                                                    
+                tavily_boost = -0.30                               
                 logger.info(f"{verifier_display_name} HIGH VERIFICATION BOOST: -{abs(tavily_boost):.2f} (score: {tavily_score:.3f})")
-            elif tavily_coverage >= 0.75 and tavily_score >= 0.4:  # More lenient thresholds (was 0.85/0.5)
-                # High coverage also boosts credibility (but less than verification score)
-                tavily_boost = -0.15  # Increased boost (was -0.08)
+            elif tavily_coverage >= 0.75 and tavily_score >= 0.4:                                          
+                                                                                          
+                tavily_boost = -0.15                               
                 logger.info(f"{verifier_display_name} HIGH COVERAGE BOOST: -{abs(tavily_boost):.2f} (coverage: {tavily_coverage:.3f}, score: {tavily_score:.3f})")
             
             logger.info(f"{verifier_display_name} adjustment: {tavily_adjustment:.3f}, contradiction penalty: {contradiction_penalty:.3f}, boost: {tavily_boost:.3f} (score: {tavily_score:.3f}, coverage: {tavily_coverage:.3f})")
         
-        # Calculate final score with Tavily adjustments
+                                                       
         final_fake_prob = min(1.0, max(0.0, base_fake_prob + consistency_adjustment + rhetorical_adjustment + tavily_adjustment + contradiction_penalty + tavily_boost))
         
-        # Generate explanation
+                              
         explanation = {
             'base_fusion_score': base_fake_prob,
             'consistency_adjustment': consistency_adjustment,
             'rhetorical_adjustment': rhetorical_adjustment,
-            'wikipedia_adjustment': tavily_adjustment,  # Keep for backward compatibility
+            'wikipedia_adjustment': tavily_adjustment,                                   
             'tavily_adjustment': tavily_adjustment,
-            'wikipedia_contradiction_penalty': contradiction_penalty,  # Keep for backward compatibility
+            'wikipedia_contradiction_penalty': contradiction_penalty,                                   
             'tavily_contradiction_penalty': contradiction_penalty,
-            'wikipedia_boost': tavily_boost,  # Keep for backward compatibility
+            'wikipedia_boost': tavily_boost,                                   
             'tavily_boost': tavily_boost,
             'final_score': final_fake_prob,
             'confidence': fusion_result.get('confidence', 0.5),
             'key_factors': []
         }
         
-        # Identify key factors
+                              
         if consistency_adjustment > 0.1:
             explanation['key_factors'].append('inconsistent_information')
-        if temporal_score < 0.5:  # Severe temporal inconsistency
+        if temporal_score < 0.5:                                 
             explanation['key_factors'].append('severe_temporal_error')
         if rhetorical_adjustment > 0.05:
             explanation['key_factors'].append('loaded_language')
-        if contradiction_penalty > 0.0:  # Extremely low verification
+        if contradiction_penalty > 0.0:                              
             explanation['key_factors'].append(f'extremely_low_{self.verifier_type}_verification')
         elif tavily_adjustment > 0.1:
             explanation['key_factors'].append(f'low_{self.verifier_type}_verification')
-        if tavily_boost < -0.1:  # High verification
+        if tavily_boost < -0.1:                     
             explanation['key_factors'].append(f'high_{self.verifier_type}_verification')
         if base_fake_prob > 0.7:
             explanation['key_factors'].append('baseline_detection')
         
-        # Add Tavily verification details to explanation
+                                                        
         if tavily_verification:
-            explanation['wikipedia_details'] = {  # Keep for backward compatibility
+            explanation['wikipedia_details'] = {                                   
                 'verification_score': tavily_verification.get('overall_score', 0.0),
                 'coverage': tavily_verification.get('tavily_coverage', tavily_verification.get('wikipedia_coverage', 0.0)),
                 'entities_found': tavily_verification.get('verification_summary', {}).get('entities_found', 0),
@@ -1416,9 +1451,9 @@ class ImprovedDetection:
             }
         
         return {
-            'prediction': 'fake' if final_fake_prob > threshold else 'real',  # Use custom threshold
+            'prediction': 'fake' if final_fake_prob > threshold else 'real',                        
             'fake_probability': final_fake_prob,
             'confidence': explanation['confidence'],
             'explanation': explanation,
-            'threshold_used': threshold  # Show which threshold was used
+            'threshold_used': threshold                                 
         }
