@@ -1,4 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { HighlightedText } from "@/components/HighlightedText";
@@ -43,6 +44,49 @@ const Result = () => {
   const text = state?.text ?? "";
   const analysis = state?.analysis ?? {};
 
+  const [relatedNews, setRelatedNews] = useState<any[]>([]);
+  const [loadingNews, setLoadingNews] = useState(false);
+
+  useEffect(() => {
+    const fetchRelatedNews = async () => {
+      if (!text) return;
+      
+      setLoadingNews(true);
+      try {
+        // Use smart news finder with entity extraction
+        const response = await fetch(
+          `http://localhost:8000/api/news/find_related`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              text: text,
+              detection_result: analysis.details || null,
+              max_results: 4,
+              language: 'en'
+            })
+          }
+        );
+        const data = await response.json();
+        
+        if (data.success && data.result?.articles) {
+          setRelatedNews(data.result.articles);
+          console.log('📰 Smart news search used query:', data.result.search_query);
+          console.log('📝 Entities extracted:', data.result.entities_used);
+          console.log('🔑 Keywords extracted:', data.result.keywords_used);
+        }
+      } catch (error) {
+        console.error('Failed to fetch related news:', error);
+      } finally {
+        setLoadingNews(false);
+      }
+    };
+
+    fetchRelatedNews();
+  }, [text, analysis]);
+
   // FAKE / TRUE
   const verdict: "FAKE" | "TRUE" | "" =
     typeof analysis.isFake === "boolean"
@@ -65,12 +109,6 @@ const Result = () => {
 
   const handleBack = () => {
     navigate("/profile");
-  };
-
-  const handleCardClick = (cardNumber: number) => {
-    console.log(`Card ${cardNumber} clicked`);
-    // Add your click logic here
-    // e.g., navigate to another page or show a modal
   };
 
   return (
@@ -130,45 +168,43 @@ const Result = () => {
           <h1 className='font-bold text-3lg'>Related News</h1>
 
           <div className="grid grid-cols-4 gap-4">
-            <Card
-              className="border border-gray-300 dark:border-border shadow cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200"
-              onClick={() => handleCardClick(1)}
-            >
-              <CardContent className="p-4">
-                <h3 className="text-sm font-semibold mb-2">Card 1</h3>
-                <p className="text-xs text-muted-foreground">Content here</p>
-              </CardContent>
-            </Card>
-
-            <Card
-              className="border border-gray-300 dark:border-border shadow cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200"
-              onClick={() => handleCardClick(2)}
-            >
-              <CardContent className="p-4">
-                <h3 className="text-sm font-semibold mb-2">Card 2</h3>
-                <p className="text-xs text-muted-foreground">Content here</p>
-              </CardContent>
-            </Card>
-
-            <Card
-              className="border border-gray-300 dark:border-border shadow cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200"
-              onClick={() => handleCardClick(3)}
-            >
-              <CardContent className="p-4">
-                <h3 className="text-sm font-semibold mb-2">Card 3</h3>
-                <p className="text-xs text-muted-foreground">Content here</p>
-              </CardContent>
-            </Card>
-
-            <Card
-              className="border border-gray-300 dark:border-border shadow cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200"
-              onClick={() => handleCardClick(4)}
-            >
-              <CardContent className="p-4">
-                <h3 className="text-sm font-semibold mb-2">Card 4</h3>
-                <p className="text-xs text-muted-foreground">Content here</p>
-              </CardContent>
-            </Card>
+            {loadingNews ? (
+              <div className="col-span-4 text-center py-8 text-muted-foreground">
+                Loading related news...
+              </div>
+            ) : relatedNews.length > 0 ? (
+              relatedNews.map((article, idx) => (
+                <Card
+                  key={idx}
+                  className="border border-gray-300 dark:border-border shadow cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200"
+                  onClick={() => window.open(article.url, '_blank')}
+                >
+                  <CardContent className="p-4">
+                    {article.urlToImage && (
+                      <img
+                        src={article.urlToImage}
+                        alt={article.title}
+                        className="w-full h-24 object-cover rounded mb-2"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    )}
+                    <h3 className="text-sm font-semibold mb-2 line-clamp-2">
+                      {article.title || 'No title'}
+                    </h3>
+                    <p className="text-xs text-muted-foreground line-clamp-3 mb-2">
+                      {article.description || 'No description available'}
+                    </p>
+                    <div className="text-xs text-blue-600 font-medium">
+                      {article.source?.name || 'Unknown source'}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <div className="col-span-4 text-center py-8 text-muted-foreground">
+                No related news found
+              </div>
+            )}
           </div>
         </div>
       
@@ -384,6 +420,40 @@ const Result = () => {
                                   ).toFixed(0)}% verified`
                                 : "No entities checked"}
                             </div>
+                            {(() => {
+                              console.log('🔍 DEBUG: verification object:', verification);
+                              console.log('🔍 DEBUG: entity_results exists?', verification?.entity_results);
+                              console.log('🔍 DEBUG: entity_results length:', verification?.entity_results?.length);
+                              
+                              if (verification?.entity_results && verification.entity_results.length > 0) {
+                                console.log('✅ Rendering entity results:', verification.entity_results);
+                                return (
+                                  <div className="mt-2 pt-2 border-t border-gray-200">
+                                    <div className="text-[10px] text-gray-500 mb-1">Found entities:</div>
+                                    <div className="space-y-1">
+                                      {verification.entity_results.slice(0, 3).map((entity: any, idx: number) => (
+                                        <div key={idx} className="flex items-center gap-1 text-[10px]">
+                                          <span className={entity.exists ? "text-green-600" : "text-red-600"}>
+                                            {entity.exists ? "✓" : "✗"}
+                                          </span>
+                                          <span className="text-gray-700 truncate">
+                                            {entity.entity}
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {verification.entity_results.length > 3 && (
+                                        <div className="text-[10px] text-gray-400 italic">
+                                          +{verification.entity_results.length - 3} more
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              } else {
+                                console.log('❌ Entity results not found or empty');
+                                return null;
+                              }
+                            })()}
                           </div>
                         </div>
                       </>

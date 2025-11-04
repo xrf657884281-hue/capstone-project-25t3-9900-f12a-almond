@@ -577,25 +577,35 @@ class ImprovedDetection:
         
 
         tavily_verification = {}
-        if self.verifier and use_verification:                                    
+        if self.verifier and use_verification:                                               
             try:
                 logger.info(f"🔍 [FAST PATH] Performing fact pre-verification using {self.verifier_type}...")
-                                                             
+                                       
                 import platform
                 import threading
                 
-                quick_score = 0.5                 
+                verification_result = None
+                quick_score = 0.5                      
                 timeout_occurred = [False]
                 
                 if platform.system() == 'Windows':
                                                                                  
                     def call_with_timeout():
-                        nonlocal quick_score
+                        nonlocal verification_result, quick_score
                         try:
-                            quick_score = self.verifier.quick_check(text)
+                            import spacy
+                            import nltk
+                            nlp = spacy.load("en_core_web_sm")
+                            doc = nlp(text[:500])
+                            entities = [ent.text for ent in doc.ents[:5]]
+                            sentences = nltk.sent_tokenize(text[:500])
+                            claims = sentences[:3]
+                            verification_result = self.verifier.comprehensive_verification(text, entities, claims)
+                            quick_score = verification_result.get('verification_score', 0.5)
                         except Exception as e:
                             logger.error(f"Tavily verification failed: {e}")
                             quick_score = 0.5
+                            verification_result = None
                         finally:
                             timeout_occurred[0] = False
                     
@@ -609,7 +619,7 @@ class ImprovedDetection:
                         timeout_occurred[0] = True
                         quick_score = 0.5
                 else:
-                                                                        
+                                                       
                     import signal
                     
                     def timeout_handler(signum, frame):
@@ -617,26 +627,51 @@ class ImprovedDetection:
                         raise TimeoutError("Fact verification timeout")
                     
                     signal.signal(signal.SIGALRM, timeout_handler)
-                    signal.alarm(10)         
+                    signal.alarm(10)                   
                     
                     try:
-                        quick_score = self.verifier.quick_check(text)
+                        import spacy
+                        import nltk
+                        nlp = spacy.load("en_core_web_sm")
+                        doc = nlp(text[:500])
+                        entities = [ent.text for ent in doc.ents[:5]]
+                        sentences = nltk.sent_tokenize(text[:500])
+                        claims = sentences[:3]
+                        verification_result = self.verifier.comprehensive_verification(text, entities, claims)
+                        quick_score = verification_result.get('verification_score', 0.5)
                     except TimeoutError:
                         logger.warning("⚠️ Tavily verification timeout (>10s)")
                         quick_score = 0.5
+                        verification_result = None
                     finally:
-                        signal.alarm(0)        
+                        signal.alarm(0)
                 
-                tavily_verification = {
-                    'overall_score': quick_score,
-                    'tavily_coverage': 1.0 if quick_score > 0.5 else 0.5,
-                    'wikipedia_coverage': 1.0 if quick_score > 0.5 else 0.5,                                   
-                    'entities_found': 1,
-                    'entities_checked': 1,
-                    'claims_verified': 1 if quick_score > 0.7 else 0,
-                    'claims_checked': 1,
-                    'provider': 'tavily'
-                }
+                if verification_result:
+                    tavily_verification = {
+                        'overall_score': verification_result.get('verification_score', quick_score),
+                        'tavily_coverage': verification_result.get('entity_coverage', quick_score),
+                        'wikipedia_coverage': verification_result.get('entity_coverage', quick_score),
+                        'entities_found': verification_result.get('entities_found', 0),
+                        'entities_checked': verification_result.get('entities_checked', 0),
+                        'claims_verified': verification_result.get('claims_verified', 0),
+                        'claims_checked': verification_result.get('claims_checked', 0),
+                        'entity_results': verification_result.get('entity_results', []),
+                        'claim_results': verification_result.get('claim_results', []),
+                        'provider': 'tavily'
+                    }
+                else:
+                    tavily_verification = {
+                        'overall_score': quick_score,
+                        'tavily_coverage': 1.0 if quick_score > 0.5 else 0.5,
+                        'wikipedia_coverage': 1.0 if quick_score > 0.5 else 0.5,                                   
+                        'entities_found': 1,
+                        'entities_checked': 1,
+                        'claims_verified': 1 if quick_score > 0.7 else 0,
+                        'claims_checked': 1,
+                        'entity_results': [],
+                        'claim_results': [],
+                        'provider': 'tavily'
+                    }
                 
                 tavily_score = tavily_verification.get('overall_score', 0.0)
                 tavily_coverage = tavily_verification.get('tavily_coverage', 0.0)
