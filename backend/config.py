@@ -62,6 +62,10 @@ class Config:
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
+    # PDF Storage Configuration
+    PDF_STORAGE_BASE_PATH: str = os.getenv("PDF_STORAGE_BASE_PATH", "storage")
+    PDF_AUTO_GENERATE: bool = os.getenv("PDF_AUTO_GENERATE", "true").lower() == "true"
+    
     @classmethod
     def validate_config(cls) -> bool:
         """Validate configuration completeness"""
