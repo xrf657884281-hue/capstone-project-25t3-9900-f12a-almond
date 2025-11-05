@@ -138,11 +138,18 @@ const Detection = () => {
           details: result.result,
         };
 
+        const recordId =
+          (result as any).record_id ||
+          (result as any).result?.record_id ||
+          (result as any)._id ||
+          (result as any).result?._id ||
+          undefined;
         navigate("/result", {
           state: {
             source: "detection",
             text: contentToDetect,
             analysis: analysis,
+            record_id: recordId,
           },
         });
       } else {
