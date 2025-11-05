@@ -705,6 +705,7 @@ async def baseline_detection(
         return {
             "success": True,
             "result": result,
+            "record_id": str(inserted_id) if inserted_id else None,
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
@@ -817,6 +818,7 @@ async def improved_detection_endpoint(
             return {
                 "success": True,
                 "result": improved_results,
+                "record_id": str(inserted_id) if inserted_id else None,
                 "timestamp": datetime.now().isoformat()
             }
         else:
@@ -850,6 +852,7 @@ async def improved_detection_endpoint(
             return {
                 "success": True,
                 "result": result,
+                "record_id": str(inserted_id) if inserted_id else None,
                 "timestamp": datetime.now().isoformat()
             }
     except Exception as e:

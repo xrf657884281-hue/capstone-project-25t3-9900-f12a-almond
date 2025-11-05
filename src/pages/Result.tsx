@@ -38,7 +38,7 @@ const Progress = ({ value }: { value?: number }) => {
 const Result = () => {
   const navigate = useNavigate();
   const { state } = useLocation() as {
-    state?: { source?: string; text?: string; analysis?: Analysis };
+    state?: { source?: string; text?: string; analysis?: Analysis; record_id?: string; };
   };
 
   const text = state?.text ?? "";
@@ -110,6 +110,70 @@ const Result = () => {
   const handleBack = () => {
     navigate("/profile");
   };
+  const handleGeneratePDF = async () => {
+    if (!state?.record_id) {
+      alert("⚠️ No record ID found for PDF generation.");
+      return;
+    }
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      const res = await fetch(`${baseUrl}/api/detection/history/${state.record_id}/generate_pdf`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.detail || "PDF generation failed");
+      alert("✅ PDF generated successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Failed to generate PDF.");
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!state?.record_id) {
+      alert("⚠️ No record ID found for PDF export.");
+      return;
+    }
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      const res = await fetch(`${baseUrl}/api/detection/history/${state.record_id}/pdf`);
+      if (!res.ok) throw new Error("Failed to fetch PDF");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `detection_${state.record_id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("❌ Failed to export PDF.");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!state?.record_id) {
+      alert("No record ID found.");
+      return;
+    }
+    const confirmDelete = window.confirm("Are you sure you want to delete this record?");
+    if (!confirmDelete) return;
+
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      const res = await fetch(`${baseUrl}/api/detection/history/${state.record_id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete record");
+      alert("✅ Record deleted successfully!");
+      navigate("/profile");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Failed to delete the record.");
+    }
+  };
 
   return (
     <div className="min-h-screen px-6 py-10 bg-background text-foreground">
@@ -119,14 +183,48 @@ const Result = () => {
 
           <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-4">
-              <div className="flex justify-end mb-3 gap-2">
-                <Button variant="outline" onClick={handleCopy} className="border border-gray-300 dark:border-border shadow">
-                  Copy
-                </Button>
-                <Button variant="outline" onClick={handleBack} className="border border-gray-300 dark:border-border shadow">
-                  Back to Profile
-                </Button>
+              <div className="flex justify-between mb-3">
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={handleGeneratePDF}
+                    className="border border-gray-300 dark:border-border shadow"
+                  >
+                    🧾 Generate PDF
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleExportPDF}
+                    className="border border-gray-300 dark:border-border shadow"
+                  >
+                    📤 Export PDF
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDelete}
+                    className="border border-gray-300 dark:border-border shadow bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    Delete Record
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleCopy}
+                    className="border border-gray-300 dark:border-border shadow"
+                  >
+                    Copy
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleBack}
+                    className="border border-gray-300 dark:border-border shadow"
+                  >
+                    Back to Profile
+                  </Button>
+                </div>
               </div>
+
 
               {(analysis.readability ?? 0) > 0 &&
                 analysis.details?.baseline_results?.text_detection?.detectgpt

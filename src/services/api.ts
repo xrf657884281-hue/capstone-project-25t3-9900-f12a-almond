@@ -15,14 +15,18 @@ export interface DetectionResponse {
     detectgpt: any;
     wikipedia_verification: any;
     key_factors: string[];
+    record_id?: string; 
+    _id?: string;
   };
+  record_id?: string;
+  _id?: string;
   timestamp: string;
 }
 
 export interface GenerationRequest {
   topic: string;
   model?: string;
-  image_url_or_b64?: string; // ✅ 新增：允许图文生成
+  image_url_or_b64?: string;
 }
 
 export interface GenerationResponse {
@@ -35,7 +39,6 @@ export interface GenerationResponse {
   timestamp: string;
 }
 
-// ✅ Vision Describe 请求与响应类型
 export interface VisionDescribeRequest {
   image_url_or_b64: string;
   detail_level?: "low" | "high" | "auto";
