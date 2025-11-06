@@ -46,14 +46,20 @@ const Result = () => {
 
   const [relatedNews, setRelatedNews] = useState<any[]>([]);
   const [loadingNews, setLoadingNews] = useState(false);
+  const [newsWarning, setNewsWarning] = useState<string>('');
 
   useEffect(() => {
     const fetchRelatedNews = async () => {
-      if (!text) return;
+      if (!text) {
+        console.log('⚠️ No text provided, skipping news fetch');
+        return;
+      }
       
+      console.log('🔍 Starting to fetch related news...');
       setLoadingNews(true);
+      
       try {
-        // Use smart news finder with entity extraction
+        console.log('📡 Sending request to backend...');
         const response = await fetch(
           `http://localhost:8000/api/news/find_related`,
           {
@@ -66,26 +72,46 @@ const Result = () => {
               detection_result: analysis.details || null,
               max_results: 4,
               language: 'en'
-            })
+            }),
+            signal: AbortSignal.timeout(30000) // 30 second timeout
           }
         );
-        const data = await response.json();
         
-        if (data.success && data.result?.articles) {
-          setRelatedNews(data.result.articles);
+        console.log('📥 Response received, parsing...');
+        const data = await response.json();
+        console.log('📦 Data parsed:', data);
+        
+        if (data.success && data.result) {
+          const articles = data.result.articles || [];
+          const warning = data.result.warning || '';
+          
+          console.log('✅ Setting related news:', articles.length, 'articles');
+          setRelatedNews(articles);
+          setNewsWarning(warning);
+          
           console.log('📰 Smart news search used query:', data.result.search_query);
           console.log('📝 Entities extracted:', data.result.entities_used);
           console.log('🔑 Keywords extracted:', data.result.keywords_used);
+          
+          if (warning) {
+            console.warn('⚠️ Warning:', warning);
+          }
+        } else {
+          console.warn('⚠️ No articles in response or request failed');
+          setRelatedNews([]);
+          setNewsWarning('');
         }
       } catch (error) {
-        console.error('Failed to fetch related news:', error);
+        console.error('❌ Failed to fetch related news:', error);
+        setRelatedNews([]);
       } finally {
+        console.log('✅ News fetch completed, setting loading to false');
         setLoadingNews(false);
       }
     };
 
     fetchRelatedNews();
-  }, [text, analysis]);
+  }, [text]); // Only depend on text to avoid re-fetching when analysis updates
 
   // FAKE / TRUE
   const verdict: "FAKE" | "TRUE" | "" =
@@ -225,16 +251,13 @@ const Result = () => {
                 </div>
               </div>
 
-
-              {(analysis.readability ?? 0) > 0 &&
-                analysis.details?.baseline_results?.text_detection?.detectgpt
+              {analysis.details?.baseline_results?.text_detection?.detectgpt
                   ?.reasoning &&
                 analysis.details.baseline_results.text_detection.detectgpt.reasoning
                   .length > 0 && (
                   <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
                     <p className="text-xs text-yellow-800">
-                      Detected errors are highlighted in red, hover to view detailed
-                      error information.
+                      Detected issues are highlighted below. Hover to view detailed information.
                     </p>
                   </div>
                 )}
@@ -245,10 +268,8 @@ const Result = () => {
                     <HighlightedText
                       text={text}
                       errors={
-                        (analysis.readability ?? 0) > 0
-                          ? analysis.details?.baseline_results?.text_detection
-                              ?.detectgpt?.reasoning || []
-                          : []
+                        analysis.details?.baseline_results?.text_detection
+                          ?.detectgpt?.reasoning || []
                       }
                       className="text-sm"
                     />
@@ -265,10 +286,18 @@ const Result = () => {
 
           <h1 className='font-bold text-3lg'>Related News</h1>
 
+          {newsWarning && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded-md">
+              <p className="text-sm text-yellow-800">
+                ⚠️ {newsWarning}
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-4 gap-4">
             {loadingNews ? (
               <div className="col-span-4 text-center py-8 text-muted-foreground">
-                Loading related news...
+                <div className="animate-pulse">Loading related news...</div>
               </div>
             ) : relatedNews.length > 0 ? (
               relatedNews.map((article, idx) => (
@@ -363,10 +392,45 @@ const Result = () => {
                 )}
               </div>
 
-              {analysis.details?.baseline_results?.text_detection?.detectgpt
-                ?.reasoning && (
+              {(() => {
+                const reasoning = analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning;
+                
+                console.log('🔍 DEBUG Analysis:', {
+                  hasDetails: !!analysis.details,
+                  hasBaseline: !!analysis.details?.baseline_results,
+                  hasTextDetection: !!analysis.details?.baseline_results?.text_detection,
+                  hasDetectGPT: !!analysis.details?.baseline_results?.text_detection?.detectgpt,
+                  hasReasoning: !!reasoning,
+                  reasoningLength: reasoning?.length,
+                  reasoningData: reasoning
+                });
+                
+                if (!reasoning || reasoning.length === 0) {
+                  console.log('❌ No reasoning data available');
+                  console.log('Analysis object:', analysis);
+                  console.log('Details:', analysis.details);
+                  return (
+                    <div className="text-sm p-3 bg-yellow-50 border border-yellow-300 rounded">
+                      <p className="font-bold text-yellow-800 mb-2">⚠️ 调试信息：</p>
+                      <p className="text-xs text-yellow-700">
+                        - 有 details: {analysis.details ? '✓' : '✗'}<br/>
+                        - 有 baseline_results: {analysis.details?.baseline_results ? '✓' : '✗'}<br/>
+                        - 有 detectgpt: {analysis.details?.baseline_results?.text_detection?.detectgpt ? '✓' : '✗'}<br/>
+                        - 有 reasoning: {reasoning ? '✓' : '✗'}<br/>
+                        - Reasoning 长度: {reasoning?.length || 0}
+                      </p>
+                      <p className="text-xs text-yellow-700 mt-2">
+                        💡 如果看到这个消息，请从 Detection 页面重新运行检测
+                      </p>
+                    </div>
+                  );
+                }
+                
+                console.log('✅ Rendering', reasoning.length, 'reasoning items');
+                
+                return (
                 <div className="space-y-2">
-                  {analysis.details.baseline_results.text_detection.detectgpt.reasoning.map(
+                  {reasoning.map(
                     (reason: string, i: number) => {
                       const titleMatch = reason.match(/\*\*(.*?)\*\*/);
                       if (titleMatch) {
@@ -400,7 +464,8 @@ const Result = () => {
                     }
                   )}
                 </div>
-              )}
+                );
+              })()}
 
               {Array.isArray(analysis.mostAISentences) &&
                 analysis.mostAISentences.length > 0 && (

@@ -27,6 +27,10 @@ class Config:
     NEWS_API_KEY: Optional[str] = os.getenv("NEWS_API_KEY", "9dc4f9221b704bde9750032343c57b3c")
     NEWS_API_BASE_URL: str = os.getenv("NEWS_API_BASE_URL", "https://newsapi.org/v2")
     
+    # SerpAPI Configuration (Google News search)
+    SERPAPI_KEY: Optional[str] = os.getenv("SERPAPI_KEY")
+    SERPAPI_BASE_URL: str = "https://serpapi.com/search"
+    
     # Database Configuration
     # 优先使用完整连接串 MONGODB_URL，否则根据以下变量组装：
     # MONGODB_USER/MONGODB_PASSWORD/MONGODB_HOST/MONGODB_PORT/MONGODB_DATABASE

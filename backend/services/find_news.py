@@ -5,6 +5,8 @@ from typing import List, Dict, Optional, Tuple
 from collections import Counter
 import spacy
 from .news_service import NewsService
+from .serpapi_service import SerpAPIService
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,17 @@ class RelatedNewsFinder:
     
     def __init__(self):
         self.news_service = NewsService()
+        self.serpapi_service = SerpAPIService()
+        self.news_cache = {}
+        self.cache_ttl = 300
+        
+        # Determine which service to use
+        self.use_serpapi = bool(Config.SERPAPI_KEY)
+        if self.use_serpapi:
+            logger.info("✅ Using SerpAPI for news search (Google News)")
+        else:
+            logger.info("⚠️ SerpAPI key not found, using News API fallback")
+        
         try:
             self.nlp = spacy.load("en_core_web_sm")
             logger.info("✅ spaCy model loaded for news finder")
@@ -93,13 +106,18 @@ class RelatedNewsFinder:
     
     def extract_keywords(self, text: str, max_keywords: int = 5) -> List[str]:
         """Extract important keywords from text"""
-        # Common stop words to filter out
+        # Extended stop words including common but meaningless words
         stop_words = {
             'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
             'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be',
             'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
             'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this',
-            'that', 'these', 'those', 'it', 'its', 'they', 'them', 'their'
+            'that', 'these', 'those', 'it', 'its', 'they', 'them', 'their',
+            # Add common but low-value words
+            'new', 'said', 'says', 'over', 'more', 'also', 'very', 'just',
+            'about', 'into', 'than', 'some', 'out', 'only', 'other', 'such',
+            'get', 'make', 'made', 'like', 'well', 'back', 'after', 'two',
+            'three', 'way', 'even', 'year', 'years', 'much', 'any', 'most'
         }
         
         # Extract words 
@@ -115,26 +133,127 @@ class RelatedNewsFinder:
         logger.info(f"📝 Extracted {len(top_keywords)} keywords: {top_keywords}")
         return top_keywords
     
+    def validate_query_specificity(self, query: str) -> bool:
+        """
+        Validate if a query is specific enough
+        
+        Args:
+            query: Search query to validate
+            
+        Returns:
+            True if query is specific enough, False if too broad
+        """
+        # Too broad: single common words
+        overly_broad_terms = {
+            'trump', 'china', 'australia', 'news', 'today', 'report',
+            'study', 'research', 'says', 'new', 'latest', 'update'
+        }
+        
+        words = query.lower().split()
+        
+        # Reject if single word and it's in broad terms list
+        if len(words) == 1 and words[0] in overly_broad_terms:
+            logger.warning(f"⚠️ Query too broad: '{query}' (single common word)")
+            return False
+        
+        # Require at least 2 words for specificity
+        if len(words) < 2:
+            logger.warning(f"⚠️ Query too short: '{query}' (need 2+ words)")
+            return False
+        
+        return True
+    
     def build_search_query(self, text: str, entities: List[str], keywords: List[str]) -> str:
-        """Build an optimized search query from entities and keywords"""
-        # Use entities (most relevant)
+        """
+        Build an optimized search query with specificity rules
+        
+        Rules:
+        - Avoid single-word queries (too broad)
+        - Combine multiple terms for specificity
+        - Use AND logic when needed
+        """
+        # Strategy 1: Use entities (most specific)
         if entities:
-           
-            query_parts = entities[:3]
-            query = ' '.join(query_parts)
-            logger.info(f"🔍 Search query (entities): {query}")
+            # Filter out single-word entities if we have multi-word ones
+            multi_word_entities = [e for e in entities if len(e.split()) > 1]
+            single_word_entities = [e for e in entities if len(e.split()) == 1]
+            
+            # Prefer multi-word entities (more specific)
+            if multi_word_entities:
+                # Use top 2 multi-word entities
+                query_parts = multi_word_entities[:2]
+                query = ' '.join(query_parts)
+                
+                # Validate specificity
+                if self.validate_query_specificity(query):
+                    logger.info(f"🔍 Search query (multi-word entities): {query}")
+                    return query
+                else:
+                    # Add keywords to make it more specific
+                    if keywords:
+                        query = f"{query} {keywords[0]}"
+                        logger.info(f"🔍 Search query (entities + keyword): {query}")
+                        return query
+            
+            # If only single-word entities, combine at least 2
+            if len(single_word_entities) >= 2:
+                query = ' '.join(single_word_entities[:3])
+                
+                # Validate and enhance if needed
+                if not self.validate_query_specificity(query) and keywords:
+                    query = f"{query} {keywords[0]}"
+                
+                logger.info(f"🔍 Search query (multiple entities): {query}")
+                return query
+            elif len(single_word_entities) == 1:
+                # Single entity: MUST combine with keywords for specificity
+                entity = single_word_entities[0]
+                if keywords and len(keywords) >= 2:
+                    query = f"{entity} {keywords[0]} {keywords[1]}"
+                elif keywords:
+                    query = f"{entity} {keywords[0]}"
+                else:
+                    # Add context from text if no keywords
+                    context_words = [w for w in text.split()[:10] if len(w) > 3]
+                    query = f"{entity} {' '.join(context_words[:2])}"
+                
+                logger.info(f"🔍 Search query (entity + context): {query}")
+                return query
+        
+        # Strategy 2: Use keywords (combine multiple for specificity)
+        if keywords and len(keywords) >= 3:
+            # Use top 3-4 keywords for good specificity
+            query = ' '.join(keywords[:4])
+            logger.info(f"🔍 Search query (multiple keywords): {query}")
+            return query
+        elif keywords and len(keywords) == 2:
+            # 2 keywords might be enough if they're specific
+            query = ' '.join(keywords[:2])
+            if self.validate_query_specificity(query):
+                logger.info(f"🔍 Search query (2 keywords): {query}")
+                return query
+            else:
+                # Add context for more specificity
+                context = ' '.join([w for w in text.split()[:8] if len(w) > 3])
+                query = f"{query} {context.split()[0]}"
+                logger.info(f"🔍 Search query (keywords + context): {query}")
+                return query
+        elif keywords and len(keywords) == 1:
+            # Single keyword is definitely too broad
+            logger.warning(f"⚠️ Single keyword '{keywords[0]}' is too broad, adding context")
+            context_words = [w for w in text.split()[:10] if len(w) > 3 and w.lower() != keywords[0]]
+            query = f"{keywords[0]} {' '.join(context_words[:3])}"
+            logger.info(f"🔍 Search query (keyword + context): {query}")
             return query
         
-      
-        if keywords:
-            query = ' '.join(keywords[:5])
-            logger.info(f"🔍 Search query (keywords): {query}")
-            return query
+        # Fallback: Use first meaningful phrase (not just first 10 words)
+        words = text.split()[:15]
+        # Remove common articles and prepositions from start
+        while words and words[0].lower() in ['the', 'a', 'an', 'in', 'on', 'at']:
+            words.pop(0)
         
-       
-        words = text.split()[:10]
-        query = ' '.join(words)
-        logger.info(f"🔍 Search query (fallback): {query}")
+        query = ' '.join(words[:10])
+        logger.info(f"🔍 Search query (fallback phrase): {query}")
         return query
     
     def extract_date_context(self, text: str) -> Optional[str]:
@@ -156,27 +275,89 @@ class RelatedNewsFinder:
 
         try:
             logger.info(f"🔍 Finding related news for text (length: {len(text)})")
-       
-            entities = self.extract_entities(text)
-           
-            keywords = self.extract_keywords(text)
             
+            # Check cache first
+            import time
+            cache_key = text[:100]  # Use first 100 chars as key
+            if cache_key in self.news_cache:
+                cached_time, cached_result = self.news_cache[cache_key]
+                if time.time() - cached_time < self.cache_ttl:
+                    logger.info(f"✅ Using cached result (age: {int(time.time() - cached_time)}s)")
+                    return cached_result
+        
+            entities = []
+            keywords = []
             
+            # Priority 1: Use Tavily verified entities (most reliable)
             if detection_result:
-                # Extract entities from tavily verification if available
                 tavily_verification = detection_result.get('tavily_verification', {})
                 entity_results = tavily_verification.get('entity_results', [])
                 
                 if entity_results:
-                    # Add verified entities to search
-                    verified_entities = [
-                        e.get('entity') for e in entity_results 
-                        if e.get('exists') and e.get('entity')
-                    ]
-                    entities.extend(verified_entities)
-                    logger.info(f"📝 Added {len(verified_entities)} verified entities from detection")
+                    # Extract entities from Tavily, with strict cleaning
+                    tavily_entities = []
+                    for e in entity_results:
+                        entity_name = e.get('entity', '').strip()
+                        if entity_name:
+                            # Skip pure numeric entities (years, numbers)
+                            if entity_name.isdigit():
+                                logger.info(f"⏩ Skipping numeric entity: {entity_name}")
+                                continue
+                            
+                            # Skip very short entities (< 3 chars)
+                            if len(entity_name) < 3:
+                                continue
+                            
+                            # Clean entity: remove newlines, extra spaces, trailing punctuation
+                            entity_name = ' '.join(entity_name.split())  # Remove all extra whitespace/newlines
+                            entity_name = entity_name.rstrip('.,;:-')  # Remove trailing punctuation
+                            
+                            # Skip if contains newlines or strange characters
+                            if '\n' in entity_name or '\r' in entity_name:
+                                logger.info(f"⏩ Skipping malformed entity: {entity_name[:30]}...")
+                                continue
+                            
+                            # Skip very long entities (> 50 chars, likely extraction errors)
+                            if len(entity_name) > 50:
+                                logger.info(f"⏩ Skipping too long entity: {entity_name[:30]}...")
+                                continue
+                            
+                            # Only keep if it has some alphabetic characters
+                            if any(c.isalpha() for c in entity_name):
+                                tavily_entities.append(entity_name)
+                    
+                    # Prioritize entities that were verified (exists=True)
+                    verified_entities = []
+                    for e in entity_results:
+                        if e.get('exists') and e.get('entity'):
+                            entity_name = e.get('entity', '').strip()
+                            # Clean and validate
+                            entity_name = ' '.join(entity_name.split())  # Remove newlines/extra spaces
+                            entity_name = entity_name.rstrip('.,;:-')
+                            
+                            # Skip if numeric, too short, or has newlines
+                            if (not entity_name.isdigit() and 
+                                len(entity_name) >= 3 and
+                                '\n' not in entity_name and 
+                                len(entity_name) <= 50):
+                                verified_entities.append(entity_name)
+                    
+                    if verified_entities:
+                        entities = verified_entities
+                        logger.info(f"✅ Using {len(verified_entities)} Tavily verified entities: {verified_entities}")
+                    elif tavily_entities:
+                        entities = tavily_entities
+                        logger.info(f"📝 Using {len(tavily_entities)} Tavily entities (unverified): {tavily_entities}")
             
-        
+            # Priority 2: If no Tavily entities, extract from text
+            if not entities:
+                logger.info("⚠️ No Tavily entities available, extracting from text...")
+                entities = self.extract_entities(text)
+            
+            # Always extract keywords as backup
+            keywords = self.extract_keywords(text)
+            
+            # Remove duplicates while preserving order
             entities = list(dict.fromkeys(entities))
 
             search_query = self.build_search_query(text, entities, keywords)
@@ -194,93 +375,132 @@ class RelatedNewsFinder:
                     pass
             
             # Step 6: Search for news
-
-            news_result = self.news_service.search_news(
-                query=search_query,
-                language=language,
-                page_size=max_results,
-                from_date=from_date
-            )
+            # Use SerpAPI if available (better results), otherwise fallback to News API
+            if self.use_serpapi:
+                logger.info(f"🔍 Using SerpAPI (Google News) to search: {search_query}")
+                news_result = self.serpapi_service.search_google_news(
+                    query=search_query,
+                    num_results=max_results * 2  # Get more for ranking
+                )
+            else:
+                logger.info(f"🔍 Using News API to search: {search_query}")
+                news_result = self.news_service.search_news(
+                    query=search_query,
+                    language=language,
+                    page_size=max_results,
+                    from_date=from_date
+                )
+            
+            # If search succeeded, rank the results
+            if news_result.get('success') and news_result.get('articles'):
+                initial_articles = news_result.get('articles', [])
+                logger.info(f"✅ Initial search returned {len(initial_articles)} articles, ranking...")
+                ranked = self.rank_articles_by_relevance(initial_articles, entities, keywords, text)
+                news_result['articles'] = ranked[:max_results]  # Limit to requested number
             
             # Fallback to top headlines if search fails 
             if not news_result.get('success') or not news_result.get('articles'):
-                logger.info("⚠️ Search API failed (free tier limitation), trying global top headlines...")
-                
-                # Use international news sources for global coverage
-                global_sources = [
-                    'bbc-news',           # BBC (UK)
-                    'cnn',                # CNN (US)
-                    'reuters',            # Reuters (Global)
-                    'al-jazeera-english', # Al Jazeera (Middle East)
-                    'the-guardian-uk',    # The Guardian (UK)
-                    'abc-news-au',        # ABC (Australia)
-                    'cbc-news',           # CBC (Canada)
-                ]
+                logger.info(f"⚠️ Search API failed, trying top headlines with query: {search_query[:40]}...")
                 
                 all_articles = []
                 
-
-                for source_batch in [global_sources[:3], global_sources[3:]]:
-                    sources_str = ','.join(source_batch)
-                    logger.info(f"🌍 Trying sources: {sources_str}")
-                    
-                    try:
-                        # Call News API directly without country parameter
-                        import requests
-                        response = requests.get(
-                            f"{self.news_service.base_url}/top-headlines",
-                            params={
-                                'sources': sources_str,
-                                'pageSize': max_results
-                            },
-                            headers={'X-API-Key': self.news_service.api_key}
-                        )
-                        
-                        if response.status_code == 200:
-                            data = response.json()
-                            if data.get('status') == 'ok':
-                                articles = data.get('articles', [])
-                                all_articles.extend(articles)
-                                logger.info(f"✅ Got {len(articles)} articles from global sources")
-                        else:
-                            logger.warning(f"⚠️ Sources request failed: {response.status_code}")
-                    except Exception as e:
-                        logger.warning(f"⚠️ Source batch failed: {e}")
-                    
-                    if len(all_articles) >= max_results:
-                        break
+                # Use country + query 
+                countries = ['us', 'gb', 'au', 'ca']
                 
-                # If still no results, try by regions
-                if len(all_articles) < max_results:
-                    logger.info("🌍 Trying regional headlines...")
-                    regions = ['us', 'gb', 'au', 'ca', 'de', 'fr', 'jp', 'cn']  
+                for country in countries:
+                    if len(all_articles) >= max_results * 2:
+                        break
                     
-                    for country in regions:
+                    logger.info(f"🌍 Searching {country.upper()} headlines with query: {search_query[:30]}...")
+                    
+                    # Use top headlines WITH query parameter
+                    news_result = self.news_service.get_top_headlines(
+                        country=country,
+                        q=search_query,
+                        page_size=max_results
+                    )
+                    
+                    if news_result.get('success') and news_result.get('articles'):
+                        articles_found = news_result.get('articles', [])
+                        all_articles.extend(articles_found)
+                        logger.info(f"✅ Got {len(articles_found)} relevant articles from {country.upper()}")
+                
+                # If still no results with query, try category-based search
+                if len(all_articles) == 0 and entities:
+                    logger.info(f"⚠️ No results with query, trying category-based search for entities: {entities[:2]}")
+                    
+                    # Try different categories based on context
+                    categories = ['science', 'technology', 'general']
+                    
+                    for category in categories:
                         if len(all_articles) >= max_results:
                             break
                         
-                        news_result = self.news_service.get_top_headlines(
-                            country=country,
-                            page_size=2 
-                        )
+                        for country in ['us', 'gb']:
+                            news_result = self.news_service.get_top_headlines(
+                                country=country,
+                                category=category,
+                                page_size=max_results
+                            )
+                            if news_result.get('success') and news_result.get('articles'):
+                                all_articles.extend(news_result.get('articles', []))
+                                logger.info(f"✅ Got {len(news_result.get('articles', []))} {category} articles from {country.upper()}")
+                                if len(all_articles) >= max_results * 2:  # Get extra for ranking
+                                    break
                         
-                        if news_result.get('success') and news_result.get('articles'):
-                            all_articles.extend(news_result.get('articles', []))
-                            logger.info(f"✅ Got articles from {country.upper()}")
+                        if len(all_articles) >= max_results * 2:
+                            break
                 
                 if all_articles:
-                    logger.info(f"✅ Global fallback successful: {len(all_articles)} articles from worldwide sources")
-                    # Rank articles by relevance using TF-IDF and word boundary matching
+                    logger.info(f"✅ Fallback successful: {len(all_articles)} articles collected")
+                    # Rank by relevance using TF-IDF and word boundary matching
                     ranked_articles = self.rank_articles_by_relevance(all_articles, entities, keywords, text)
-                    news_result = {
-                        'success': True,
-                        'articles': ranked_articles[:max_results],
-                        'total_results': len(all_articles)
-                    }
+                    
+                    # Higher relevance threshold: require meaningful score
+                    # Entity match (×5) or 2+ keyword matches (×2 each) = minimum ~10 points
+                    MIN_RELEVANCE_SCORE = 8.0
+                    relevant_articles = [a for a in ranked_articles if a.get('relevance_score', 0) >= MIN_RELEVANCE_SCORE]
+                    
+                    if relevant_articles:
+                        logger.info(f"✅ {len(relevant_articles)} highly relevant articles (score >= {MIN_RELEVANCE_SCORE})")
+                        news_result = {
+                            'success': True,
+                            'articles': relevant_articles[:max_results],
+                            'total_results': len(all_articles),
+                            'relevance': 'high'
+                        }
+                    else:
+                        # Check if there are any articles with low but non-zero scores
+                        low_relevant = [a for a in ranked_articles if a.get('relevance_score', 0) > 0]
+                        
+                        if low_relevant and len(low_relevant) <= 2:
+                            # Very few low-relevance articles - likely not related
+                            logger.warning(f"⚠️ Only {len(low_relevant)} low-relevance articles (score < {MIN_RELEVANCE_SCORE})")
+                            logger.warning(f"   Query: {search_query}, Entities: {entities[:3]}, Keywords: {keywords[:3]}")
+                            
+                            news_result = {
+                                'success': True,
+                                'articles': [],
+                                'total_results': 0,
+                                'warning': f'No highly relevant news found for this topic. The topic may be too specific or not in current headlines.',
+                                'searched_query': search_query,
+                                'entities_searched': entities[:3],
+                                'keywords_searched': keywords[:3]
+                            }
+                        else:
+                            # Return low-relevance articles with warning
+                            logger.warning(f"⚠️ No high-relevance articles, returning {len(low_relevant)} low-relevance matches")
+                            news_result = {
+                                'success': True,
+                                'articles': low_relevant[:max_results],
+                                'total_results': len(all_articles),
+                                'warning': 'These articles have low relevance to your topic',
+                                'relevance': 'low'
+                            }
                 else:
                     news_result = {
                         'success': False,
-                        'error': 'No articles found from global sources',
+                        'error': 'No articles found',
                         'articles': []
                     }
             
@@ -312,7 +532,7 @@ class RelatedNewsFinder:
                         
                         logger.info(f"✅ Re-ranked {len(all_combined)} articles, selected top {len(articles)}")
                 
-                return {
+                final_result = {
                     'success': True,
                     'articles': articles[:max_results],
                     'total_results': len(articles),
@@ -321,6 +541,13 @@ class RelatedNewsFinder:
                     'keywords_used': keywords[:5],
                     'source': 'newsapi'
                 }
+                
+                # Store in cache
+                import time
+                self.news_cache[cache_key] = (time.time(), final_result)
+                logger.info(f"💾 Cached result for future requests")
+                
+                return final_result
             else:
                 error_msg = news_result.get('error', 'Unknown error')
                 logger.error(f"❌ News search failed: {error_msg}")
@@ -416,6 +643,11 @@ class RelatedNewsFinder:
             except Exception as e:
                 logger.warning(f"⚠️ TF-IDF calculation failed: {e}")
         
+        # Debug logging
+        logger.info(f"🔍 Ranking {len(articles)} articles with:")
+        logger.info(f"   Entities: {entities[:5]}")
+        logger.info(f"   Keywords: {keywords[:5]}")
+        
         # Score each article
         for idx, article in enumerate(articles):
             score = 0
@@ -427,25 +659,32 @@ class RelatedNewsFinder:
             combined_lower = combined_text.lower()
             
             # Method 1: Regex word boundary matching (precise matching)
+            entity_score = 0
+            keyword_score = 0
+            
             # Score by entity matches with word boundaries (higher weight)
             for entity in entities:
                 # Use \b for word boundary to avoid partial matches
                 pattern = r'\b' + re.escape(entity.lower()) + r'\b'
                 matches = len(re.findall(pattern, combined_lower))
                 if matches > 0:
-                    score += matches * 5  # Higher weight for entities
+                    entity_score += matches * 5  # Higher weight for entities
+                    logger.info(f"   ✓ Entity match: '{entity}' x{matches} in article {idx+1}")
             
             # Score by keyword matches with word boundaries
             for keyword in keywords:
                 pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
                 matches = len(re.findall(pattern, combined_lower))
                 if matches > 0:
-                    score += matches * 2  # Medium weight for keywords
+                    keyword_score += matches * 2  # Medium weight for keywords
+                    logger.info(f"   ✓ Keyword match: '{keyword}' x{matches} in article {idx+1}")
+            
+            score = entity_score + keyword_score
             
             # Method 2: Add TF-IDF similarity score (if available)
             if idx in tfidf_scores:
                 tfidf_score = tfidf_scores[idx]
-                score += tfidf_score * 20  # Scale TF-IDF (0-1) to comparable range
+                score += tfidf_score * 20  
                 article['tfidf_similarity'] = round(tfidf_score, 3)
             
             article['relevance_score'] = score
