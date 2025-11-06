@@ -60,6 +60,7 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // init form from localStorage
   useEffect(() => {
     try {
       const raw = localStorage.getItem("user");
@@ -80,13 +81,17 @@ const Profile = () => {
     }
   }, []);
 
+  // load detection history (for sidebar)
   useEffect(() => {
     const fetchHistory = async () => {
       try {
         setLoading(true);
         setError(null);
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-        const res = await fetch(`${baseUrl}/api/detection/history?page=1&page_size=9999`);
+        const baseUrl =
+          import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+        const res = await fetch(
+          `${baseUrl}/api/detection/history?page=1&page_size=9999`
+        );
         const data = await res.json();
         if (!data.success) throw new Error("Failed to fetch history");
         setHistory(data.items || []);
@@ -125,8 +130,46 @@ const Profile = () => {
     setForm((prev) => ({ ...prev, photoURL: base64 }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     try {
+      const baseUrl =
+        import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      const raw = localStorage.getItem("user");
+      const u: StoredUser = raw ? JSON.parse(raw) : {};
+
+      const payload = {
+        username_or_email:
+          u.email || form.email || u.displayName || "user@example.com",
+        username: form.username,
+        email: form.email,
+        avatar_url_or_b64: form.photoURL,
+      };
+
+      const res = await fetch(`${baseUrl}/api/auth/update_profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.detail || "Backend update failed");
+      }
+
+      const updated: StoredUser = {
+        ...u,
+        displayName: form.username,
+        email: form.email,
+        photoURL: form.photoURL,
+        uid: u.uid ?? `local-${Date.now()}`,
+        provider: u.provider ?? "local",
+      };
+      localStorage.setItem("user", JSON.stringify(updated));
+      setInitial(form);
+      alert("✅ Profile updated successfully!");
+    } catch (err) {
+      console.error("update_profile failed:", err);
+      alert("⚠️ Failed to update remote database, local profile saved instead.");
       const raw = localStorage.getItem("user");
       const u: StoredUser = raw ? JSON.parse(raw) : {};
       const updated: StoredUser = {
@@ -139,16 +182,13 @@ const Profile = () => {
       };
       localStorage.setItem("user", JSON.stringify(updated));
       setInitial(form);
-      alert("✅ Profile updated successfully!");
-    } catch {
-      alert("❌ Failed to write to localStorage.");
     }
   };
 
   const handleRecordClick = (record: DetectionRecord) => {
     const normalized = {
       ...record.result,
-      details: record.result, 
+      details: record.result,
       readability:
         (record.result?.final_prediction?.fake_probability ?? 0) * 100,
       humanConfidence:
@@ -164,6 +204,7 @@ const Profile = () => {
         source: "detection",
         text: record.text,
         analysis: normalized,
+        record_id: record._id,
       },
     });
   };
@@ -179,7 +220,9 @@ const Profile = () => {
           <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-4">
               <h2 className="text-lg font-semibold mb-3">Detection History</h2>
-              {loading && <p className="text-sm text-muted-foreground">Loading...</p>}
+              {loading && (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              )}
               {error && <p className="text-sm text-red-600">❌ {error}</p>}
               {!loading && !error && history.length === 0 && (
                 <p className="text-sm text-muted-foreground">
@@ -298,7 +341,11 @@ const Profile = () => {
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
-                <Button variant="default" onClick={handleSave} disabled={!hasChanges}>
+                <Button
+                  variant="default"
+                  onClick={handleSave}
+                  disabled={!hasChanges}
+                >
                   Save Changes
                 </Button>
               </div>

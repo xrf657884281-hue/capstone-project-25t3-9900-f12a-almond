@@ -21,6 +21,9 @@ from typing import Optional, List, Dict, Any
 import logging
 import os
 from datetime import datetime
+from pathlib import Path
+from bson import ObjectId
+from bson.errors import InvalidId
 
 # Load environment variables from .env as early as possible
 _env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -42,6 +45,7 @@ except Exception:
 from config import Config
 from services.mongo_service import mongo_service
 from services.news_service import NewsService
+from services.pdf_service import PDFService
 
 # Configure logging
 logging.basicConfig(
@@ -75,6 +79,7 @@ detection_service = None
 improved_detection = None
 generation_service = None
 vision_service = None
+pdf_service = PDFService(storage_base_path=Config.PDF_STORAGE_BASE_PATH)
 
 # Pydantic models
 class DetectionRequest(BaseModel):
@@ -131,6 +136,14 @@ class UpdateAvatarRequest(BaseModel):
     uid: Optional[str] = None
     username_or_email: Optional[str] = None
     avatar_url_or_b64: str
+
+class UpdateProfileRequest(BaseModel):
+    uid: Optional[str] = None
+    username_or_email: Optional[str] = None
+    username: Optional[str] = None
+    display_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    avatar_url_or_b64: Optional[str] = None
 
 # ============ Vision describe models ============
 class VisionDescribeRequest(BaseModel):
@@ -489,6 +502,122 @@ async def update_avatar(body: UpdateAvatarRequest, request: Request):
         pass
     return {"success": True}
 
+@app.put("/api/auth/update_profile")
+async def update_profile(body: UpdateProfileRequest, request: Request):
+    """
+    更新用户个人信息
+    
+    支持通过uid或username_or_email识别用户，可以更新：
+    - username/display_name
+    - email
+    - avatar_url_or_b64
+    
+    Args:
+        body: 更新请求，包含用户标识和要更新的字段
+    
+    Returns:
+        更新结果
+    """
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    
+    users = mongo_service.get_collection("users")
+    
+    # 识别用户：优先使用uid，其次使用username_or_email
+    query = None
+    if body.uid:
+        query = {"uid": body.uid}
+    elif body.username_or_email:
+        query = {"$or": [{"username": body.username_or_email}, {"email": body.username_or_email}]}
+    else:
+        raise HTTPException(status_code=422, detail="Provide uid or username_or_email to identify user")
+    
+    # 查找用户是否存在
+    user = users.find_one(query)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # 构建更新文档
+    update_doc: Dict[str, Any] = {
+        "$set": {
+            "updated_at": datetime.utcnow().isoformat()
+        }
+    }
+    
+    # 检查是否有要更新的字段
+    has_updates = False
+    
+    # 更新username（如果提供了display_name，优先使用display_name，否则使用username）
+    if body.display_name is not None:
+        update_doc["$set"]["display_name"] = body.display_name
+        # 如果原用户没有username，也更新username字段
+        if not user.get("username"):
+            update_doc["$set"]["username"] = body.display_name
+        has_updates = True
+    elif body.username is not None:
+        update_doc["$set"]["username"] = body.username
+        # 如果原用户没有display_name，也更新display_name字段
+        if not user.get("display_name"):
+            update_doc["$set"]["display_name"] = body.username
+        has_updates = True
+    
+    # 更新email
+    if body.email is not None:
+        # 检查email是否已被其他用户使用
+        existing_user = users.find_one({"email": str(body.email), "_id": {"$ne": user.get("_id")}})
+        if existing_user:
+            raise HTTPException(status_code=409, detail="Email already in use by another user")
+        update_doc["$set"]["email"] = str(body.email)
+        has_updates = True
+    
+    # 更新头像
+    if body.avatar_url_or_b64 is not None:
+        update_doc["$set"]["avatar_url_or_b64"] = body.avatar_url_or_b64
+        has_updates = True
+    
+    if not has_updates:
+        raise HTTPException(status_code=422, detail="No fields provided for update")
+    
+    # 执行更新
+    try:
+        result = users.update_one(query, update_doc, bypass_document_validation=True)
+        if result.modified_count == 0 and result.matched_count > 0:
+            # 用户存在但字段值相同，也算成功
+            pass
+        elif result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # 记录活动日志
+        try:
+            if mongo_service.is_connected():
+                mongo_service.insert_one("user_activity_log", {
+                    "action": "update_profile",
+                    "user": {
+                        "uid": user.get("uid"),
+                        "username": user.get("username"),
+                        "email": user.get("email")
+                    },
+                    "request_meta": {
+                        "updated_fields": list(update_doc["$set"].keys())
+                    },
+                    "result_meta": {"ok": True},
+                    "client": _client_info(request),
+                    "created_at": datetime.utcnow().isoformat()
+                })
+        except Exception:
+            pass
+        
+        return {
+            "success": True,
+            "message": "Profile updated successfully",
+            "updated_fields": list(update_doc["$set"].keys())
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating profile: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
+
 # Detection endpoints
 @app.post("/api/detect/baseline")
 async def baseline_detection(
@@ -518,15 +647,37 @@ async def baseline_detection(
             image_url_or_b64=request.image_url_or_b64
         )
         # Write to MongoDB (best-effort)
+        inserted_id = None
         try:
             if mongo_service.is_connected():
-                mongo_service.insert_one("detection_results", {
+                inserted_id = mongo_service.insert_one("detection_results", {
                     "type": "baseline",
                     "text": req_text or request.text,
                     "image_url_or_b64": request.image_url_or_b64,
                     "result": result,
                     "created_at": datetime.utcnow().isoformat()
                 })
+                
+                # Generate PDF if auto-generate is enabled
+                if Config.PDF_AUTO_GENERATE and inserted_id:
+                    try:
+                        detection_data = {
+                            "type": "baseline",
+                            "text": req_text or request.text,
+                            "image_url_or_b64": request.image_url_or_b64,
+                            "result": result,
+                            "created_at": datetime.utcnow().isoformat()
+                        }
+                        pdf_info = pdf_service.generate_detection_pdf(inserted_id, detection_data)
+                        if pdf_info:
+                            # Update record with PDF paths
+                            col = mongo_service.get_collection("detection_results")
+                            col.update_one(
+                                {"_id": ObjectId(inserted_id)},
+                                {"$set": {"pdf_path": pdf_info["pdf_path"], "pdf_url": pdf_info["pdf_url"]}}
+                            )
+                    except Exception as pdf_error:
+                        logger.warning(f"Failed to generate PDF for detection {inserted_id}: {pdf_error}")
         except Exception:
             pass
 
@@ -554,6 +705,7 @@ async def baseline_detection(
         return {
             "success": True,
             "result": result,
+            "record_id": str(inserted_id) if inserted_id else None,
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
@@ -603,9 +755,10 @@ async def improved_detection_endpoint(
                 detection_config=config  # NEW: Pass custom configuration
             )
             # Write to MongoDB (best-effort)
+            inserted_id = None
             try:
                 if mongo_service.is_connected():
-                    mongo_service.insert_one("detection_results", {
+                    inserted_id = mongo_service.insert_one("detection_results", {
                         "type": "improved",
                         "text": req_text or request.text,
                         "image_url_or_b64": request.image_url_or_b64,
@@ -614,6 +767,29 @@ async def improved_detection_endpoint(
                         "result": improved_results,
                         "created_at": datetime.utcnow().isoformat()
                     })
+                    
+                    # Generate PDF if auto-generate is enabled
+                    if Config.PDF_AUTO_GENERATE and inserted_id:
+                        try:
+                            detection_data = {
+                                "type": "improved",
+                                "text": req_text or request.text,
+                                "image_url_or_b64": request.image_url_or_b64,
+                                "config": config,
+                                "baseline": baseline_results,
+                                "result": improved_results,
+                                "created_at": datetime.utcnow().isoformat()
+                            }
+                            pdf_info = pdf_service.generate_detection_pdf(inserted_id, detection_data)
+                            if pdf_info:
+                                # Update record with PDF paths
+                                col = mongo_service.get_collection("detection_results")
+                                col.update_one(
+                                    {"_id": ObjectId(inserted_id)},
+                                    {"$set": {"pdf_path": pdf_info["pdf_path"], "pdf_url": pdf_info["pdf_url"]}}
+                                )
+                        except Exception as pdf_error:
+                            logger.warning(f"Failed to generate PDF for detection {inserted_id}: {pdf_error}")
             except Exception:
                 pass
 
@@ -642,6 +818,7 @@ async def improved_detection_endpoint(
             return {
                 "success": True,
                 "result": improved_results,
+                "record_id": str(inserted_id) if inserted_id else None,
                 "timestamp": datetime.now().isoformat()
             }
         else:
@@ -675,6 +852,7 @@ async def improved_detection_endpoint(
             return {
                 "success": True,
                 "result": result,
+                "record_id": str(inserted_id) if inserted_id else None,
                 "timestamp": datetime.now().isoformat()
             }
     except Exception as e:
@@ -881,11 +1059,12 @@ async def generate_single(
             result = service.generate_fake_news(request_dict)
         
         # Write to MongoDB (best-effort)
+        inserted_id = None
         try:
             if mongo_service.is_connected():
                 # Ensure strategy is set (required by MongoDB validator)
                 strategy_value = request.strategy if request.strategy else "loaded_language"
-                mongo_service.insert_one("generation_results", {
+                inserted_id = mongo_service.insert_one("generation_results", {
                     "topic": req_topic_override or request.topic,
                     "strategy": strategy_value,
                     "model_type": request.model_type,
@@ -895,6 +1074,29 @@ async def generate_single(
                     "created_at": datetime.utcnow().isoformat()
                 })
                 logger.info(f"Successfully saved generation result to MongoDB")
+                
+                # Generate PDF if auto-generate is enabled
+                if Config.PDF_AUTO_GENERATE and inserted_id:
+                    try:
+                        generation_data = {
+                            "topic": req_topic_override or request.topic,
+                            "strategy": strategy_value,
+                            "model_type": request.model_type,
+                            "image_url_or_b64": getattr(request, 'image_url_or_b64', None),
+                            "params": request_dict,
+                            "result": result,
+                            "created_at": datetime.utcnow().isoformat()
+                        }
+                        pdf_info = pdf_service.generate_generation_pdf(inserted_id, generation_data)
+                        if pdf_info:
+                            # Update record with PDF paths
+                            col = mongo_service.get_collection("generation_results")
+                            col.update_one(
+                                {"_id": ObjectId(inserted_id)},
+                                {"$set": {"pdf_path": pdf_info["pdf_path"], "pdf_url": pdf_info["pdf_url"]}}
+                            )
+                    except Exception as pdf_error:
+                        logger.warning(f"Failed to generate PDF for generation {inserted_id}: {pdf_error}")
         except Exception as e:
             logger.error(f"Failed to save generation result to MongoDB: {e}")
             pass
@@ -950,7 +1152,7 @@ async def generate_batch(
         try:
             if mongo_service.is_connected():
                 for r in results:
-                    mongo_service.insert_one("generation_results", {
+                    inserted_id = mongo_service.insert_one("generation_results", {
                         "topic": r.get("topic"),
                         "strategy": r.get("strategy"),
                         "model_type": r.get("model"),
@@ -958,6 +1160,27 @@ async def generate_batch(
                         "result": r,
                         "created_at": datetime.utcnow().isoformat()
                     })
+                    
+                    # Generate PDF if auto-generate is enabled
+                    if Config.PDF_AUTO_GENERATE and inserted_id:
+                        try:
+                            generation_data = {
+                                "topic": r.get("topic"),
+                                "strategy": r.get("strategy"),
+                                "model_type": r.get("model"),
+                                "params": {"strategy": request.strategies[0] if request.strategies else None, "samples_per_topic": request.samples_per_topic or 1},
+                                "result": r,
+                                "created_at": datetime.utcnow().isoformat()
+                            }
+                            pdf_info = pdf_service.generate_generation_pdf(inserted_id, generation_data)
+                            if pdf_info:
+                                col = mongo_service.get_collection("generation_results")
+                                col.update_one(
+                                    {"_id": ObjectId(inserted_id)},
+                                    {"$set": {"pdf_path": pdf_info["pdf_path"], "pdf_url": pdf_info["pdf_url"]}}
+                                )
+                        except Exception as pdf_error:
+                            logger.warning(f"Failed to generate PDF for batch generation {inserted_id}: {pdf_error}")
         except Exception:
             pass
 
@@ -1163,6 +1386,256 @@ async def get_detection_history(
         if it.get("_id") is not None:
             it["_id"] = str(it["_id"])  # type: ignore
     return {"success": True, "total": total, "page": page, "page_size": page_size, "items": items}
+
+@app.delete("/api/detection/history/{record_id}")
+async def delete_detection_record(
+    record_id: str,
+    user_id: Optional[str] = None
+):
+    """
+    删除指定的检测记录
+    
+    Args:
+        record_id: 要删除的记录ID（MongoDB ObjectId字符串）
+        user_id: 可选的用户ID，如果提供则验证记录是否属于该用户
+    
+    Returns:
+        删除结果
+    """
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    
+    # 验证ObjectId格式
+    try:
+        object_id = ObjectId(record_id)
+    except (InvalidId, Exception):
+        raise HTTPException(status_code=400, detail="Invalid record ID format")
+    
+    col = mongo_service.get_collection("detection_results")
+    
+    # 构建查询条件
+    query: Dict[str, Any] = {"_id": object_id}
+    
+    # 如果提供了user_id，验证记录是否属于该用户
+    if user_id:
+        query["user_id"] = user_id
+    
+    # 先查找记录是否存在
+    record = col.find_one(query)
+    if not record:
+        # 如果提供了user_id，可能是记录不存在或不属于该用户
+        if user_id:
+            raise HTTPException(
+                status_code=404, 
+                detail="Record not found or does not belong to the specified user"
+            )
+        else:
+            raise HTTPException(status_code=404, detail="Record not found")
+    
+    # 删除记录
+    try:
+        result = col.delete_one({"_id": object_id})
+        if result.deleted_count > 0:
+            return {
+                "success": True,
+                "message": "Record deleted successfully",
+                "deleted_id": record_id
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete record")
+    except Exception as e:
+        logger.error(f"Error deleting detection record {record_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete record: {str(e)}")
+
+@app.get("/api/detection/history/{record_id}/pdf")
+async def download_detection_pdf(record_id: str):
+    """
+    下载检测结果的PDF文件
+    
+    Args:
+        record_id: 检测记录ID
+    
+    Returns:
+        PDF文件响应
+    """
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    
+    try:
+        object_id = ObjectId(record_id)
+    except (InvalidId, Exception):
+        raise HTTPException(status_code=400, detail="Invalid record ID format")
+    
+    col = mongo_service.get_collection("detection_results")
+    record = col.find_one({"_id": object_id})
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    # Check if PDF exists
+    pdf_path = record.get("pdf_path")
+    if not pdf_path:
+        raise HTTPException(status_code=404, detail="PDF not generated for this record")
+    
+    # Convert to absolute path if relative
+    pdf_file = Path(pdf_path)
+    if not pdf_file.is_absolute():
+        # If relative path, resolve from backend directory
+        backend_dir = Path(__file__).parent
+        pdf_file = backend_dir / pdf_path
+    
+    if not pdf_file.exists():
+        raise HTTPException(status_code=404, detail=f"PDF file not found at {pdf_file}")
+    
+    return FileResponse(
+        path=str(pdf_file.absolute()),
+        media_type="application/pdf",
+        filename=f"detection_{record_id}.pdf"
+    )
+
+@app.get("/api/generation/history/{record_id}/pdf")
+async def download_generation_pdf(record_id: str):
+    """
+    下载生成结果的PDF文件
+    
+    Args:
+        record_id: 生成记录ID
+    
+    Returns:
+        PDF文件响应
+    """
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    
+    try:
+        object_id = ObjectId(record_id)
+    except (InvalidId, Exception):
+        raise HTTPException(status_code=400, detail="Invalid record ID format")
+    
+    col = mongo_service.get_collection("generation_results")
+    record = col.find_one({"_id": object_id})
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    # Check if PDF exists
+    pdf_path = record.get("pdf_path")
+    if not pdf_path:
+        raise HTTPException(status_code=404, detail="PDF not generated for this record")
+    
+    # Convert to absolute path if relative
+    pdf_file = Path(pdf_path)
+    if not pdf_file.is_absolute():
+        # If relative path, resolve from backend directory
+        backend_dir = Path(__file__).parent
+        pdf_file = backend_dir / pdf_path
+    
+    if not pdf_file.exists():
+        raise HTTPException(status_code=404, detail=f"PDF file not found at {pdf_file}")
+    
+    return FileResponse(
+        path=str(pdf_file.absolute()),
+        media_type="application/pdf",
+        filename=f"generation_{record_id}.pdf"
+    )
+
+@app.post("/api/detection/history/{record_id}/generate_pdf")
+async def generate_detection_pdf_on_demand(record_id: str):
+    """
+    按需生成检测结果的PDF
+    
+    Args:
+        record_id: 检测记录ID
+    
+    Returns:
+        生成结果
+    """
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    
+    try:
+        object_id = ObjectId(record_id)
+    except (InvalidId, Exception):
+        raise HTTPException(status_code=400, detail="Invalid record ID format")
+    
+    col = mongo_service.get_collection("detection_results")
+    record = col.find_one({"_id": object_id})
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    # Generate PDF
+    try:
+        detection_data = dict(record)
+        detection_data.pop("_id", None)
+        # Convert ObjectId to string for PDF filename
+        pdf_info = pdf_service.generate_detection_pdf(str(record["_id"]), detection_data)
+        
+        if pdf_info:
+            # Update record with PDF paths
+            col.update_one(
+                {"_id": object_id},
+                {"$set": {"pdf_path": pdf_info["pdf_path"], "pdf_url": pdf_info["pdf_url"]}}
+            )
+            return {
+                "success": True,
+                "message": "PDF generated successfully",
+                "pdf_url": pdf_info["pdf_url"]
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to generate PDF")
+    except Exception as e:
+        logger.error(f"Error generating PDF for detection {record_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
+
+@app.post("/api/generation/history/{record_id}/generate_pdf")
+async def generate_generation_pdf_on_demand(record_id: str):
+    """
+    按需生成生成结果的PDF
+    
+    Args:
+        record_id: 生成记录ID
+    
+    Returns:
+        生成结果
+    """
+    if not mongo_service.is_connected():
+        raise HTTPException(status_code=503, detail="Database not connected")
+    
+    try:
+        object_id = ObjectId(record_id)
+    except (InvalidId, Exception):
+        raise HTTPException(status_code=400, detail="Invalid record ID format")
+    
+    col = mongo_service.get_collection("generation_results")
+    record = col.find_one({"_id": object_id})
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    # Generate PDF
+    try:
+        generation_data = dict(record)
+        generation_data.pop("_id", None)
+        # Convert ObjectId to string for PDF filename
+        pdf_info = pdf_service.generate_generation_pdf(str(record["_id"]), generation_data)
+        
+        if pdf_info:
+            # Update record with PDF paths
+            col.update_one(
+                {"_id": object_id},
+                {"$set": {"pdf_path": pdf_info["pdf_path"], "pdf_url": pdf_info["pdf_url"]}}
+            )
+            return {
+                "success": True,
+                "message": "PDF generated successfully",
+                "pdf_url": pdf_info["pdf_url"]
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to generate PDF")
+    except Exception as e:
+        logger.error(f"Error generating PDF for generation {record_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
 @app.get("/api/generation/history")
 async def get_generation_history(

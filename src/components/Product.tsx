@@ -13,7 +13,7 @@ const Product = () => {
 
         <section className="grid gap-6 p-6 md:grid-cols-[1fr_2fr] md:min-h-screen">
             <div className="mx-2">
-                <Separator className="my-10 bg-white/20 h-[2px]" />
+                <Separator className="my-10 dark:bg-white/20 bg-gray-400 h-[2px]" />
                 <div className="inline-flex items-center gap-2">
                     <Wand2/>
                     <span className="text-2xl font-semibold">Generate</span>
@@ -22,7 +22,7 @@ const Product = () => {
                     Safe sandbox generation. From chosen keywords and images, our engine creates controlled synthetic articles that simulate styles—loaded language, conspiracy framing, cross-modal inconsistencies—to stress-test detectors and auto-document results for research and training only.
                 </p>
 
-                <Separator className="my-10 bg-white/20 h-[2px]" />
+                <Separator className="my-10 dark:bg-white/20 bg-gray-400 h-[2px]" />
                 <div className="inline-flex items-center gap-2">
                     <FileSearch/>
                     <span className="text-2xl font-semibold">Detection</span>
@@ -32,7 +32,7 @@ const Product = () => {
                 </p>
 
 
-                <Separator className="my-10 bg-white/20 h-[2px]" />
+                <Separator className="my-10 dark:bg-white/20 bg-gray-400 h-[2px]" />
                 <div className="inline-flex items-center gap-2">
                     <BarChart3/>
                     <span className="text-2xl font-semibold">Visualization</span>
