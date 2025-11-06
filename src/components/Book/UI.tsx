@@ -11,12 +11,9 @@ export const generatePictures = [
 ];
 
 export const detectionPictures = [
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
+    "Detection_1",
+    "Detection_2",
+    "Detection_3",
 ];
 /*
 export const visualizationPictures = [
