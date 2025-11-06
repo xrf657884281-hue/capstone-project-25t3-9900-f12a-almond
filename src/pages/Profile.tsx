@@ -214,7 +214,9 @@ const Profile = () => {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col items-center px-4 py-10">
       <h1 className="text-3xl font-bold mb-6">Profile</h1>
+      
 
+      {/* history part */}
       <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-3 space-y-4">
           <Card className="border border-gray-300 dark:border-border shadow">
@@ -250,7 +252,8 @@ const Profile = () => {
             </CardContent>
           </Card>
         </div>
-
+        
+        {/*chart part*/}
         <div className="lg:col-span-6">
           <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-6">
@@ -286,7 +289,8 @@ const Profile = () => {
             </CardContent>
           </Card>
         </div>
-
+        
+        {/*personal information part*/}
         <div className="lg:col-span-3">
           <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-6 space-y-6">

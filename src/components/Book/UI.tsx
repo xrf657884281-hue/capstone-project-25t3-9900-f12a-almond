@@ -6,12 +6,8 @@ export interface PageData {
 }
 
 export const generatePictures = [
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
+    "Generate_1",
+    "Generate_2",
 ];
 
 export const detectionPictures = [
