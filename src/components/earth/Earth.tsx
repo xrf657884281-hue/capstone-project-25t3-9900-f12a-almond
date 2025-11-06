@@ -53,7 +53,7 @@ const EarthCanvas: React.FC<EarthCanvasProps> = ({ className }) => {
       title: 'Controls'
     })
     
-    // 将 GUI 框移到右上角
+    // Change Guide frmework location
     const guiElement = gui.domElement as HTMLElement
     guiElement.style.position = 'absolute'
     guiElement.style.top = '0'
