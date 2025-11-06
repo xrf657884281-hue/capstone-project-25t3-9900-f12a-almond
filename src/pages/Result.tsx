@@ -60,6 +60,9 @@ const Result = () => {
       
       try {
         console.log('📡 Sending request to backend...');
+        console.log('📄 Text to analyze (first 200 chars):', text.substring(0, 200));
+        console.log('📏 Total text length:', text.length);
+        
         const response = await fetch(
           `http://localhost:8000/api/news/find_related`,
           {

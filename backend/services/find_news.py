@@ -165,95 +165,54 @@ class RelatedNewsFinder:
     
     def build_search_query(self, text: str, entities: List[str], keywords: List[str]) -> str:
         """
-        Build an optimized search query with specificity rules
+        Build an optimized search query by combining entities and keywords
         
-        Rules:
-        - Avoid single-word queries (too broad)
-        - Combine multiple terms for specificity
-        - Use AND logic when needed
+        Strategy: Combine all relevant terms for maximum specificity
+        Example: "Tesla Samsung battery partnership" instead of just "Samsung SDI"
         """
-        # Strategy 1: Use entities (most specific)
-        if entities:
-            # Filter out single-word entities if we have multi-word ones
-            multi_word_entities = [e for e in entities if len(e.split()) > 1]
-            single_word_entities = [e for e in entities if len(e.split()) == 1]
-            
-            # Prefer multi-word entities (more specific)
-            if multi_word_entities:
-                # Use top 2 multi-word entities
-                query_parts = multi_word_entities[:2]
-                query = ' '.join(query_parts)
-                
-                # Validate specificity
-                if self.validate_query_specificity(query):
-                    logger.info(f"🔍 Search query (multi-word entities): {query}")
-                    return query
-                else:
-                    # Add keywords to make it more specific
-                    if keywords:
-                        query = f"{query} {keywords[0]}"
-                        logger.info(f"🔍 Search query (entities + keyword): {query}")
-                        return query
-            
-            # If only single-word entities, combine at least 2
-            if len(single_word_entities) >= 2:
-                query = ' '.join(single_word_entities[:3])
-                
-                # Validate and enhance if needed
-                if not self.validate_query_specificity(query) and keywords:
-                    query = f"{query} {keywords[0]}"
-                
-                logger.info(f"🔍 Search query (multiple entities): {query}")
-                return query
-            elif len(single_word_entities) == 1:
-                # Single entity: MUST combine with keywords for specificity
-                entity = single_word_entities[0]
-                if keywords and len(keywords) >= 2:
-                    query = f"{entity} {keywords[0]} {keywords[1]}"
-                elif keywords:
-                    query = f"{entity} {keywords[0]}"
-                else:
-                    # Add context from text if no keywords
-                    context_words = [w for w in text.split()[:10] if len(w) > 3]
-                    query = f"{entity} {' '.join(context_words[:2])}"
-                
-                logger.info(f"🔍 Search query (entity + context): {query}")
-                return query
+        query_parts = []
         
-        # Strategy 2: Use keywords (combine multiple for specificity)
-        if keywords and len(keywords) >= 3:
-            # Use top 3-4 keywords for good specificity
-            query = ' '.join(keywords[:4])
-            logger.info(f"🔍 Search query (multiple keywords): {query}")
-            return query
-        elif keywords and len(keywords) == 2:
-            # 2 keywords might be enough if they're specific
-            query = ' '.join(keywords[:2])
-            if self.validate_query_specificity(query):
-                logger.info(f"🔍 Search query (2 keywords): {query}")
-                return query
-            else:
-                # Add context for more specificity
-                context = ' '.join([w for w in text.split()[:8] if len(w) > 3])
-                query = f"{query} {context.split()[0]}"
-                logger.info(f"🔍 Search query (keywords + context): {query}")
-                return query
-        elif keywords and len(keywords) == 1:
-            # Single keyword is definitely too broad
-            logger.warning(f"⚠️ Single keyword '{keywords[0]}' is too broad, adding context")
-            context_words = [w for w in text.split()[:10] if len(w) > 3 and w.lower() != keywords[0]]
-            query = f"{keywords[0]} {' '.join(context_words[:3])}"
-            logger.info(f"🔍 Search query (keyword + context): {query}")
-            return query
+        # Step 1: Add all single-word entities (company names, people, places)
+        single_word_entities = [e for e in entities if len(e.split()) == 1]
+        query_parts.extend(single_word_entities[:3])  # Top 3 single-word entities
         
-        # Fallback: Use first meaningful phrase (not just first 10 words)
-        words = text.split()[:15]
-        # Remove common articles and prepositions from start
-        while words and words[0].lower() in ['the', 'a', 'an', 'in', 'on', 'at']:
-            words.pop(0)
+        # Step 2: Add relevant keywords that aren't in entities
+        entities_lower = [e.lower() for e in entities]
+        unique_keywords = []
+        for kw in keywords[:5]:
+            # Skip if keyword is already part of an entity
+            if kw not in entities_lower:
+                unique_keywords.append(kw)
         
-        query = ' '.join(words[:10])
-        logger.info(f"🔍 Search query (fallback phrase): {query}")
+        # Add top 2-3 unique keywords
+        query_parts.extend(unique_keywords[:3])
+        
+        # Step 3: If we have multi-word entities that capture key concepts, add them
+        multi_word_entities = [e for e in entities if len(e.split()) > 1 and len(e.split()) <= 3]
+        if multi_word_entities:
+            # Add the most specific multi-word entity
+            query_parts.append(multi_word_entities[0])
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        final_parts = []
+        for part in query_parts:
+            part_lower = part.lower()
+            if part_lower not in seen:
+                seen.add(part_lower)
+                final_parts.append(part)
+        
+        # Build final query (limit to 6-7 words for best results)
+        query = ' '.join(final_parts[:7])
+        
+        # Validate specificity
+        if not self.validate_query_specificity(query):
+            # If still not specific enough, add context from text
+            context_words = [w for w in text.split()[:15] if len(w) > 4]
+            query = f"{query} {' '.join(context_words[:2])}"
+        
+        logger.info(f"🔍 Search query (combined): {query}")
+        logger.info(f"   Components: {len(single_word_entities)} single entities + {len(unique_keywords)} keywords + {len(multi_word_entities)} phrases")
         return query
     
     def extract_date_context(self, text: str) -> Optional[str]:
