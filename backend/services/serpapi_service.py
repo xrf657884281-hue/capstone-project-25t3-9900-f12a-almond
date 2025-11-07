@@ -38,15 +38,20 @@ class SerpAPIService:
             optimized_query = query
             query_words = query.split()
             
-            # Add AND logic for multi-word queries (more specific)
+            # Strategy: Keep it simple - only use AND for 2-3 core terms
+            # Too many ANDs cause connection failures or no results
             if use_and_logic and len(query_words) > 1:
-                # For SerpAPI/Google, use quotes for phrases or AND for terms
                 if len(query_words) <= 3:
                     # Short phrases: use quotes for exact match
                     optimized_query = f'"{query}"'
+                elif len(query_words) <= 5:
+                    # 4-5 words: keep all naturally (Google handles it well)
+                    optimized_query = query
                 else:
-                    # use and
-                    optimized_query = ' AND '.join(query_words[:5])
+                    # 6+ words: Use AND for first 3 ONLY, rest as natural keywords
+                    core_terms = ' AND '.join(query_words[:3])
+                    extra_terms = ' '.join(query_words[3:6])
+                    optimized_query = f"{core_terms} {extra_terms}"
             
             params = {
                 'engine': 'google',

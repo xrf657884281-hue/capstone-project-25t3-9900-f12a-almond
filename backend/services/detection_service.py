@@ -265,10 +265,12 @@ VERDICT: [Real/Suspicious/Fake]
 CONFIDENCE: [0-100]%
 FAKE_PROBABILITY: [0.0-1.0]
 REASONING:
-- [Point 1]
-- [Point 2]
+- **Point 1: [Title]** - [Detailed explanation in 1-2 sentences]
+- **Point 2: [Title]** - [Detailed explanation in 1-2 sentences]
+- **Point 3: [Title]** - [Detailed explanation in 1-2 sentences]
 
-Consider: factual accuracy, source credibility, language manipulation, logical consistency."""
+Consider: factual accuracy, source credibility, language manipulation, logical consistency.
+IMPORTANT: Each reasoning point MUST include both a title and a detailed explanation after the dash."""
         
         response = self.gpt4_client.chat.completions.create(
             model=self.gpt4_model,
@@ -277,7 +279,7 @@ Consider: factual accuracy, source credibility, language manipulation, logical c
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
-            max_tokens=500
+            max_tokens=800
         )
         
         result_text = response.choices[0].message.content
