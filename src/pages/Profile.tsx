@@ -1,16 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
-import type { PieLabelRenderProps } from "recharts";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import DoughnutChart from "@/components/Profile/DougunutChart";
+import HistoryTabContent from "@/components/Profile/HistoryTab";
 
 type StoredUser = {
   uid?: string;
@@ -32,6 +26,20 @@ type DetectionRecord = {
   text?: string;
   result?: any;
   created_at: string;
+};
+
+type GenerationRecord = {
+  _id: string;
+  type: string;
+  prompt?: string;
+  generated_text?: string;
+  created_at: string;
+};
+
+type DetectionStats = {
+  real: number;
+  fake: number;
+  misleading: number;
 };
 
 const inputCls =
@@ -57,8 +65,11 @@ const Profile = () => {
   });
   const [preview, setPreview] = useState<string | null>(null);
   const [history, setHistory] = useState<DetectionRecord[]>([]);
+  const [generationHistory, setGenerationHistory] = useState<GenerationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [detectionPage, setDetectionPage] = useState(1);
+  const [generationPage, setGenerationPage] = useState(1);
 
   // init form from localStorage
   useEffect(() => {
@@ -74,7 +85,11 @@ const Profile = () => {
         setPreview(photoURL);
       } else {
         setForm({ username: "User", email: "user@example.com", photoURL: null });
-        setInitial({ username: "User", email: "user@example.com", photoURL: null });
+        setInitial({
+          username: "User",
+          email: "user@example.com",
+          photoURL: null,
+        });
       }
     } catch {
       setForm({ username: "User", email: "user@example.com", photoURL: null });
@@ -102,6 +117,26 @@ const Profile = () => {
       }
     };
     fetchHistory();
+  }, []);
+
+  // load generation history
+  useEffect(() => {
+    const fetchGenerationHistory = async () => {
+      try {
+        const baseUrl =
+          import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+        const res = await fetch(
+          `${baseUrl}/api/generation/history?page=1&page_size=9999`
+        );
+        const data = await res.json();
+        if (data.success) {
+          setGenerationHistory(data.items || []);
+        }
+      } catch (err: any) {
+        console.error("Failed to load generation history:", err.message);
+      }
+    };
+    fetchGenerationHistory();
   }, []);
 
   const hasChanges =
@@ -169,7 +204,9 @@ const Profile = () => {
       alert("✅ Profile updated successfully!");
     } catch (err) {
       console.error("update_profile failed:", err);
-      alert("⚠️ Failed to update remote database, local profile saved instead.");
+      alert(
+        "⚠️ Failed to update remote database, local profile saved instead."
+      );
       const raw = localStorage.getItem("user");
       const u: StoredUser = raw ? JSON.parse(raw) : {};
       const updated: StoredUser = {
@@ -209,51 +246,83 @@ const Profile = () => {
     });
   };
 
-  const COLORS = ["#22c55e", "#ef4444", "#facc15"];
+  // Calculate detection statistics from history (cached)
+  const detectionStats: DetectionStats = useMemo(
+    () => ({
+      real: history.filter(
+        (item) =>
+          item.result?.final_prediction?.prediction?.toLowerCase() === "real"
+      ).length,
+      fake: history.filter(
+        (item) =>
+          item.result?.final_prediction?.prediction?.toLowerCase() === "fake"
+      ).length,
+      misleading: history.filter(
+        (item) =>
+          item.result?.final_prediction?.prediction?.toLowerCase() ===
+          "misleading"
+      ).length,
+    }),
+    [history]
+  );
+
+  // Calculate total pages for pagination
+  const itemsPerPageForCalc = 5;
+  const getTotalPages = (items: any[]) => {
+    return Math.ceil(items.length / itemsPerPageForCalc);
+  };
+
+  const detectionTotalPages = getTotalPages(history);
+  const generationTotalPages = getTotalPages(generationHistory);
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col items-center px-4 py-10">
       <h1 className="text-3xl font-bold mb-6">Profile</h1>
-      
 
       {/* history part */}
       <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-3 space-y-4">
           <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-4">
-              <h2 className="text-lg font-semibold mb-3">Detection History</h2>
-              {loading && (
-                <p className="text-sm text-muted-foreground">Loading...</p>
-              )}
-              {error && <p className="text-sm text-red-600">❌ {error}</p>}
-              {!loading && !error && history.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  No detection history available.
-                </p>
-              )}
-              {!loading && history.length > 0 && (
-                <ul className="space-y-3 max-h-[70vh] overflow-auto">
-                  {history.map((item) => (
-                    <li
-                      key={item._id}
-                      onClick={() => handleRecordClick(item)}
-                      className="border border-gray-300 dark:border-border rounded-md p-2 bg-gray-50 dark:bg-muted text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-                    >
-                      <div className="font-medium truncate">
-                        {item.text?.slice(0, 80) || "No text"}
-                      </div>
-                      <div className="text-xs text-right text-muted-foreground mt-1">
-                        {new Date(item.created_at).toLocaleString()}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <Tabs defaultValue="detection" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="detection">Detection History</TabsTrigger>
+                  <TabsTrigger value="generation">Generation History</TabsTrigger>
+                </TabsList>
+
+                <HistoryTabContent
+                  tabValue="detection"
+                  loading={loading}
+                  error={error}
+                  items={history}
+                  currentPage={detectionPage}
+                  totalPages={detectionTotalPages}
+                  onPageChange={setDetectionPage}
+                  onItemClick={handleRecordClick}
+                  getItemText={(item) => item.text?.slice(0, 80) || "No text"}
+                />
+
+                <HistoryTabContent
+                  tabValue="generation"
+                  loading={false}
+                  error={null}
+                  items={generationHistory}
+                  currentPage={generationPage}
+                  totalPages={generationTotalPages}
+                  onPageChange={setGenerationPage}
+                  onItemClick={undefined}
+                  getItemText={(item) =>
+                    item.generated_text?.slice(0, 80) ||
+                    item.prompt?.slice(0, 80) ||
+                    "No text"
+                  }
+                />
+              </Tabs>
             </CardContent>
           </Card>
         </div>
-        
-        {/*chart part*/}
+
+        {/* chart part */}
         <div className="lg:col-span-6">
           <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-6">
@@ -261,36 +330,14 @@ const Profile = () => {
                 Detection Statistics
               </h2>
 
-              <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: "Real", value: 5 },
-                      { name: "Fake", value: 3 },
-                      { name: "Misleading", value: 2 },
-                    ]}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={120}
-                    dataKey="value"
-                    nameKey="name"
-                    label={(props: PieLabelRenderProps) =>
-                      `${props.name ?? ""} (${props.value ?? 0})`
-                    }
-                  >
-                    <Cell fill={COLORS[0]} />
-                    <Cell fill={COLORS[1]} />
-                    <Cell fill={COLORS[2]} />
-                  </Pie>
-                  <Tooltip />
-                  <Legend verticalAlign="bottom" height={36} />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="w-full h-80 flex items-center justify-center">
+                <DoughnutChart detectionStats={detectionStats} />
+              </div>
             </CardContent>
           </Card>
         </div>
-        
-        {/*personal information part*/}
+
+        {/* personal information part */}
         <div className="lg:col-span-3">
           <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-6 space-y-6">
