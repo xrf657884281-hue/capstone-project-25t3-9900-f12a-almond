@@ -41,8 +41,36 @@ const Result = () => {
     state?: { source?: string; text?: string; analysis?: Analysis; record_id?: string; };
   };
 
-  const text = state?.text ?? "";
-  const analysis = state?.analysis ?? {};
+  // Try to restore data from localStorage if state is empty
+  const getInitialData = () => {
+    if (state?.text && state?.analysis) {
+      // Save to localStorage for future refreshes
+      localStorage.setItem('lastDetectionResult', JSON.stringify({
+        text: state.text,
+        analysis: state.analysis,
+        record_id: state.record_id
+      }));
+      return { text: state.text, analysis: state.analysis };
+    }
+    
+    // Restore from localStorage if available
+    try {
+      const cached = localStorage.getItem('lastDetectionResult');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        console.log('📦 Restored data from localStorage');
+        return { text: parsed.text || "", analysis: parsed.analysis || {} };
+      }
+    } catch (e) {
+      console.error('Failed to restore from localStorage:', e);
+    }
+    
+    return { text: "", analysis: {} };
+  };
+
+  const initialData = getInitialData();
+  const text = initialData.text;
+  const analysis = initialData.analysis;
 
   const [relatedNews, setRelatedNews] = useState<any[]>([]);
   const [loadingNews, setLoadingNews] = useState(false);
@@ -441,7 +469,8 @@ const Result = () => {
                         let content = reason
                           .replace(/\*\*(.*?)\*\*/, "")
                           .trim();
-                        content = content.replace(/^:\s*/, "");
+                        // Remove leading :, -, or whitespace
+                        content = content.replace(/^[\s:\-]+/, "");
                         return (
                           <div
                             key={i}
@@ -476,7 +505,7 @@ const Result = () => {
                     <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
                       Key Factors
                     </h4>
-                    {analysis.mostAISentences.map((s, i) => (
+                    {analysis.mostAISentences.map((s: string, i: number) => (
                       <div
                         key={i}
                         className="text-sm bg-gray-50 rounded-md border border-gray-300 p-2"

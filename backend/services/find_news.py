@@ -415,47 +415,31 @@ class RelatedNewsFinder:
                     # Rank by relevance using TF-IDF and word boundary matching
                     ranked_articles = self.rank_articles_by_relevance(all_articles, entities, keywords, text)
                     
-                    # Higher relevance threshold: require meaningful score
-                    # Entity match (×5) or 2+ keyword matches (×2 each) = minimum ~10 points
-                    MIN_RELEVANCE_SCORE = 8.0
-                    relevant_articles = [a for a in ranked_articles if a.get('relevance_score', 0) >= MIN_RELEVANCE_SCORE]
-                    
-                    if relevant_articles:
-                        logger.info(f"✅ {len(relevant_articles)} highly relevant articles (score >= {MIN_RELEVANCE_SCORE})")
+                    # Return top articles sorted by relevance score (no threshold)
+                    # This ensures users always see results, even if relevance is low
+                    if ranked_articles:
+                        top_articles = ranked_articles[:max_results]
+                        max_score = max(a.get('relevance_score', 0) for a in top_articles)
+                        avg_score = sum(a.get('relevance_score', 0) for a in top_articles) / len(top_articles)
+                        
+                        logger.info(f"✅ Returning {len(top_articles)} articles sorted by relevance")
+                        logger.info(f"   Scores: max={max_score:.1f}, avg={avg_score:.1f}")
+                        
                         news_result = {
                             'success': True,
-                            'articles': relevant_articles[:max_results],
+                            'articles': top_articles,
                             'total_results': len(all_articles),
-                            'relevance': 'high'
+                            'max_score': max_score,
+                            'avg_score': avg_score
                         }
                     else:
-                        # Check if there are any articles with low but non-zero scores
-                        low_relevant = [a for a in ranked_articles if a.get('relevance_score', 0) > 0]
-                        
-                        if low_relevant and len(low_relevant) <= 2:
-                            # Very few low-relevance articles - likely not related
-                            logger.warning(f"⚠️ Only {len(low_relevant)} low-relevance articles (score < {MIN_RELEVANCE_SCORE})")
-                            logger.warning(f"   Query: {search_query}, Entities: {entities[:3]}, Keywords: {keywords[:3]}")
-                            
-                            news_result = {
-                                'success': True,
-                                'articles': [],
-                                'total_results': 0,
-                                'warning': f'No highly relevant news found for this topic. The topic may be too specific or not in current headlines.',
-                                'searched_query': search_query,
-                                'entities_searched': entities[:3],
-                                'keywords_searched': keywords[:3]
-                            }
-                        else:
-                            # Return low-relevance articles with warning
-                            logger.warning(f"⚠️ No high-relevance articles, returning {len(low_relevant)} low-relevance matches")
-                            news_result = {
-                                'success': True,
-                                'articles': low_relevant[:max_results],
-                                'total_results': len(all_articles),
-                                'warning': 'These articles have low relevance to your topic',
-                                'relevance': 'low'
-                            }
+                        logger.warning(f"⚠️ No articles found")
+                        news_result = {
+                            'success': True,
+                            'articles': [],
+                            'total_results': 0,
+                            'warning': 'No news articles found for this topic'
+                        }
                 else:
                     news_result = {
                         'success': False,

@@ -32,14 +32,14 @@ class Config:
     SERPAPI_BASE_URL: str = "https://serpapi.com/search"
     
     # Database Configuration
-    # 优先使用完整连接串 MONGODB_URL，否则根据以下变量组装：
+
     # MONGODB_USER/MONGODB_PASSWORD/MONGODB_HOST/MONGODB_PORT/MONGODB_DATABASE
     MONGODB_USER: Optional[str] = os.getenv("MONGODB_USER", os.getenv("MONGO_INITDB_ROOT_USERNAME", "admin"))
     MONGODB_PASSWORD: Optional[str] = os.getenv("MONGODB_PASSWORD", os.getenv("MONGO_INITDB_ROOT_PASSWORD", "admin123"))
     MONGODB_HOST: str = os.getenv("MONGODB_HOST", "127.0.0.1")
     MONGODB_PORT: str = os.getenv("MONGODB_PORT", "27017")
     MONGODB_DATABASE: str = os.getenv("MONGODB_DATABASE", os.getenv("MONGO_INITDB_DATABASE", "fakenews_db"))
-    # 若提供 MONGODB_URL 则优先使用，否则按上面变量自动拼接，并默认 authSource=admin 以兼容 docker-compose 设置
+  
     MONGODB_URL: str = os.getenv(
         "MONGODB_URL",
         f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}/{MONGODB_DATABASE}?authSource=admin"
