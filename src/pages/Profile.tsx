@@ -2,9 +2,10 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import DoughnutChart from "@/components/Profile/DougunutChart";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
 import HistoryTabContent from "@/components/Profile/HistoryTab";
+import DoughnutChart from "@/components/Profile/DougunutChart";
 
 type StoredUser = {
   uid?: string;
@@ -70,6 +71,8 @@ const Profile = () => {
   const [error, setError] = useState<string | null>(null);
   const [detectionPage, setDetectionPage] = useState(1);
   const [generationPage, setGenerationPage] = useState(1);
+  const [statsTab, setStatsTab] = useState("overall");
+  const [generationVariant, setGenerationVariant] = useState<"style" | "domain">("style");
 
   // init form from localStorage
   useEffect(() => {
@@ -266,6 +269,43 @@ const Profile = () => {
     [history]
   );
 
+  // Calculate generation statistics
+  const generationStats = useMemo(
+    () => {
+      const byStyle: Record<string, number> = {};
+      const byDomain: Record<string, number> = {};
+
+      generationHistory.forEach((item) => {
+        // Extract style from params
+        const style = (item as any).params?.style 
+          ? ((item as any).params.style as string).charAt(0).toUpperCase() + ((item as any).params.style as string).slice(1)
+          : item.type || "Unknown";
+        byStyle[style] = (byStyle[style] || 0) + 1;
+
+        // Extract domain from params
+        const domain = (item as any).params?.domain 
+          ? ((item as any).params.domain as string).charAt(0).toUpperCase() + ((item as any).params.domain as string).slice(1)
+          : "General";
+        byDomain[domain] = (byDomain[domain] || 0) + 1;
+      });
+
+      return { byStyle, byDomain };
+    },
+    [generationHistory]
+  );
+
+  // Calculate overall statistics
+  const overallStats = useMemo(
+    () => ({
+      real: detectionStats.real,
+      fake: detectionStats.fake,
+      misleading: detectionStats.misleading,
+      totalDetections: detectionStats.real + detectionStats.fake + detectionStats.misleading,
+      totalGenerations: generationHistory.length,
+    }),
+    [detectionStats, generationHistory]
+  );
+
   // Calculate total pages for pagination
   const itemsPerPageForCalc = 5;
   const getTotalPages = (items: any[]) => {
@@ -322,17 +362,176 @@ const Profile = () => {
           </Card>
         </div>
 
-        {/* chart part */}
+        {/* chart part with tabs */}
         <div className="lg:col-span-6">
           <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-6">
-              <h2 className="text-lg font-semibold mb-4 text-center">
-                Detection Statistics
-              </h2>
+              <Tabs value={statsTab} onValueChange={setStatsTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="overall">Overall</TabsTrigger>
+                  <TabsTrigger value="detection">Detection</TabsTrigger>
+                  <TabsTrigger value="generation">Generation</TabsTrigger>
+                </TabsList>
 
-              <div className="w-full h-80 flex items-center justify-center">
-                <DoughnutChart detectionStats={detectionStats} />
-              </div>
+                {/* Overall Tab */}
+                <TabsContent value="overall" className="mt-6">
+                  <h2 className="text-lg font-semibold mb-4 text-center">
+                    Overall Statistics
+                  </h2>
+                  <div className="w-full h-80 flex items-center justify-center">
+                    <DoughnutChart
+                      type="overall"
+                      overallStats={{
+                        detections: overallStats.totalDetections,
+                        generations: overallStats.totalGenerations,
+                      }}
+                    />
+                  </div>
+                  <div className="mt-6 grid grid-cols-3 gap-4">
+                    <div className="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                      <p className="text-sm text-muted-foreground">Total Detections</p>
+                      <p className="text-2xl font-bold text-blue-600">{overallStats.totalDetections}</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20">
+                      <p className="text-sm text-muted-foreground">Total Generations</p>
+                      <p className="text-2xl font-bold text-purple-600">{overallStats.totalGenerations}</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-muted">
+                      <p className="text-sm text-muted-foreground">Total Activities</p>
+                      <p className="text-2xl font-bold">
+                        {overallStats.totalDetections + overallStats.totalGenerations}
+                      </p>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Detection Tab */}
+                <TabsContent value="detection" className="mt-6">
+                  <h2 className="text-lg font-semibold mb-4 text-center">
+                    Detection Statistics
+                  </h2>
+                  <div className="w-full h-80 flex items-center justify-center">
+                    <DoughnutChart
+                      type="detection"
+                      detectionStats={detectionStats}
+                    />
+                  </div>
+                  <div className="mt-6 grid grid-cols-3 gap-4">
+                    <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
+                      <p className="text-sm text-muted-foreground">Real</p>
+                      <p className="text-2xl font-bold text-green-600">{detectionStats.real}</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-red-50 dark:bg-red-900/20">
+                      <p className="text-sm text-muted-foreground">Fake</p>
+                      <p className="text-2xl font-bold text-red-600">{detectionStats.fake}</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20">
+                      <p className="text-sm text-muted-foreground">Misleading</p>
+                      <p className="text-2xl font-bold text-yellow-600">{detectionStats.misleading}</p>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Generation Tab */}
+                <TabsContent value="generation" className="mt-6">
+                  <h2 className="text-lg font-semibold mb-4 text-center">
+                    Generation Statistics
+                  </h2>
+
+                  {/* Style vs Domain Toggle */}
+                  <div className="flex justify-center gap-2 mb-6">
+                    <button
+                      onClick={() => setGenerationVariant("style")}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        generationVariant === "style"
+                          ? "bg-blue-600 text-white"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      By Style
+                    </button>
+                    <button
+                      onClick={() => setGenerationVariant("domain")}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        generationVariant === "domain"
+                          ? "bg-blue-600 text-white"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      By Topic
+                    </button>
+                  </div>
+
+                  <div className="w-full h-80 flex items-center justify-center">
+                    <DoughnutChart
+                      type="generation"
+                      generationStats={generationStats}
+                      variant={generationVariant}
+                    />
+                  </div>
+
+                  {/* Generation Statistics Cards */}
+                  <div className="mt-6">
+                    {generationVariant === "style" ? (
+                      // Style Cards
+                      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                        <div className="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                          <p className="text-sm text-muted-foreground">Fun</p>
+                          <p className="text-2xl font-bold text-blue-600">
+                            {generationStats.byStyle["Fun"] || 0}
+                          </p>
+                        </div>
+                        <div className="text-center p-3 rounded-lg bg-red-50 dark:bg-red-900/20">
+                          <p className="text-sm text-muted-foreground">Formal</p>
+                          <p className="text-2xl font-bold text-red-600">
+                            {generationStats.byStyle["Formal"] || 0}
+                          </p>
+                        </div>
+                        <div className="text-center p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20">
+                          <p className="text-sm text-muted-foreground">Sensational</p>
+                          <p className="text-2xl font-bold text-yellow-600">
+                            {generationStats.byStyle["Sensational"] || 0}
+                          </p>
+                        </div>
+                        <div className="text-center p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20">
+                          <p className="text-sm text-muted-foreground">Normal</p>
+                          <p className="text-2xl font-bold text-purple-600">
+                            {generationStats.byStyle["Normal"] || 0}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      // Domain Cards
+                      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                        <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
+                          <p className="text-sm text-muted-foreground">Technology</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            {generationStats.byDomain["Technology"] || 0}
+                          </p>
+                        </div>
+                        <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20">
+                          <p className="text-sm text-muted-foreground">Politics</p>
+                          <p className="text-2xl font-bold text-amber-600">
+                            {generationStats.byDomain["Politics"] || 0}
+                          </p>
+                        </div>
+                        <div className="text-center p-3 rounded-lg bg-red-50 dark:bg-red-900/20">
+                          <p className="text-sm text-muted-foreground">Business</p>
+                          <p className="text-2xl font-bold text-red-600">
+                            {generationStats.byDomain["Business"] || 0}
+                          </p>
+                        </div>
+                        <div className="text-center p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20">
+                          <p className="text-sm text-muted-foreground">Sports</p>
+                          <p className="text-2xl font-bold text-purple-600">
+                            {generationStats.byDomain["Sports"] || 0}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         </div>

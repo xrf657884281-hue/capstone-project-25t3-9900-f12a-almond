@@ -2,7 +2,6 @@ import {
   Pagination,
   PaginationContent,
   PaginationItem,
-  PaginationLink,
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
@@ -35,17 +34,11 @@ const PaginationComponent = ({
             />
           </PaginationItem>
 
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-            <PaginationItem key={page}>
-              <PaginationLink
-                onClick={() => onPageChange(page)}
-                isActive={page === currentPage}
-                className="cursor-pointer"
-              >
-                {page}
-              </PaginationLink>
-            </PaginationItem>
-          ))}
+          <PaginationItem>
+            <span className="px-4 py-2 text-sm font-medium">
+              {currentPage} / {totalPages}
+            </span>
+          </PaginationItem>
 
           <PaginationItem>
             <PaginationNext
