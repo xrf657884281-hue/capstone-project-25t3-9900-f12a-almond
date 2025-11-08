@@ -33,6 +33,12 @@ function FilteredRecordsList<T extends BaseRecord>({
   const end = start + itemsPerPage;
   const paginatedRecords = records.slice(start, end);
 
+  // limited text length
+  const truncateText = (text: string, maxLength: number = 60) => {
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength) + '...';
+  };
+
   return (
     <div className="mt-6 border border-gray-300 dark:border-border rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
@@ -49,20 +55,27 @@ function FilteredRecordsList<T extends BaseRecord>({
 
       <div className="space-y-2">
         {paginatedRecords.length > 0 ? (
-          paginatedRecords.map((record) => (
-            <div
-              key={record._id}
-              onClick={() => onRecordClick?.(record)}
-              className={`p-3 rounded-md border border-gray-200 dark:border-border hover:bg-muted transition-colors ${
-                onRecordClick ? "cursor-pointer" : ""
-              }`}
-            >
-              <p className="text-sm font-medium truncate">{renderText(record)}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {new Date(record.created_at).toLocaleString()}
-              </p>
-            </div>
-          ))
+          paginatedRecords.map((record) => {
+            // Fix overflow bug
+            const displayText = truncateText(renderText(record), 60);
+            
+            return (
+              <div
+                key={record._id}
+                onClick={() => onRecordClick?.(record)}
+                className={`p-3 rounded-md border border-gray-200 dark:border-border hover:bg-muted transition-colors ${
+                  onRecordClick ? "cursor-pointer" : ""
+                }`}
+              >
+                <p className="text-sm font-medium">
+                  {displayText}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {new Date(record.created_at).toLocaleString()}
+                </p>
+              </div>
+            );
+          })
         ) : (
           <p className="text-center text-muted-foreground py-8">
             No records found
