@@ -1,0 +1,94 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import HistoryTabContent from "@/components/Profile/HistoryTab";
+
+type DetectionRecord = {
+  _id: string;
+  type: string;
+  text?: string;
+  result?: any;
+  created_at: string;
+};
+
+type GenerationRecord = {
+  _id: string;
+  type: string;
+  prompt?: string;
+  generated_text?: string;
+  created_at: string;
+  params?: {
+    style?: string;
+    domain?: string;
+  };
+};
+
+type HistorySidebarProps = {
+  detectionHistory: DetectionRecord[];
+  generationHistory: GenerationRecord[];
+  detectionLoading: boolean;
+  detectionError: string | null;
+  detectionPage: number;
+  generationPage: number;
+  detectionTotalPages: number;
+  generationTotalPages: number;
+  onDetectionPageChange: (page: number) => void;
+  onGenerationPageChange: (page: number) => void;
+  onDetectionRecordClick: (record: DetectionRecord) => void;
+};
+
+const HistorySidebar = ({
+  detectionHistory,
+  generationHistory,
+  detectionLoading,
+  detectionError,
+  detectionPage,
+  generationPage,
+  detectionTotalPages,
+  generationTotalPages,
+  onDetectionPageChange,
+  onGenerationPageChange,
+  onDetectionRecordClick,
+}: HistorySidebarProps) => {
+  return (
+    <Card className="border border-gray-300 dark:border-border shadow">
+      <CardContent className="p-4">
+        <Tabs defaultValue="detection" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="detection">Detection History</TabsTrigger>
+            <TabsTrigger value="generation">Generation History</TabsTrigger>
+          </TabsList>
+
+          <HistoryTabContent
+            tabValue="detection"
+            loading={detectionLoading}
+            error={detectionError}
+            items={detectionHistory}
+            currentPage={detectionPage}
+            totalPages={detectionTotalPages}
+            onPageChange={onDetectionPageChange}
+            onItemClick={onDetectionRecordClick}
+            getItemText={(item) => item.text?.slice(0, 80) || "No text"}
+          />
+
+          <HistoryTabContent
+            tabValue="generation"
+            loading={false}
+            error={null}
+            items={generationHistory}
+            currentPage={generationPage}
+            totalPages={generationTotalPages}
+            onPageChange={onGenerationPageChange}
+            onItemClick={undefined}
+            getItemText={(item) =>
+              item.generated_text?.slice(0, 80) ||
+              item.prompt?.slice(0, 80) ||
+              "No text"
+            }
+          />
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default HistorySidebar;
