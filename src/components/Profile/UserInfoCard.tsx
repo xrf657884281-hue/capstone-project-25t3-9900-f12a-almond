@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -27,6 +27,11 @@ const UserInfoCard = ({ initialData, onSave }: UserInfoCardProps) => {
   const [form, setForm] = useState(initialData);
   const [initial, setInitial] = useState(initialData);
   const [preview, setPreview] = useState<string | null>(initialData.photoURL);
+  useEffect(() => {
+    setForm(initialData);
+    setInitial(initialData);
+    setPreview(initialData.photoURL);
+  }, [initialData]);
 
   const hasChanges =
     form.username !== initial.username ||

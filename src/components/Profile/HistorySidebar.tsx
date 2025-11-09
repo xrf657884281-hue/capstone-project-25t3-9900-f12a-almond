@@ -20,6 +20,11 @@ type GenerationRecord = {
     style?: string;
     domain?: string;
   };
+  result?: {
+    article?: string;
+    summary?: string;
+    [key: string]: any;
+  };
 };
 
 type HistorySidebarProps = {
@@ -49,6 +54,36 @@ const HistorySidebar = ({
   onGenerationPageChange,
   onDetectionRecordClick,
 }: HistorySidebarProps) => {
+  const handleGenerationRecordClick = async (record: GenerationRecord) => {
+    try {
+      const recordId = record._id;
+      const baseUrl =
+        import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+      await fetch(`${baseUrl}/api/generation/history/${recordId}/generate_pdf`, {
+        method: "POST",
+      });
+
+      const res = await fetch(
+        `${baseUrl}/api/generation/history/${recordId}/pdf`
+      );
+      if (!res.ok) throw new Error("Failed to download PDF");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `generation_${recordId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("❌ Failed to download generation PDF:", err);
+      alert("Downloading the generated record PDF failed. Please try again later.");
+    }
+  };
+
   return (
     <Card className="border border-gray-300 dark:border-border shadow">
       <CardContent className="p-4">
@@ -78,9 +113,10 @@ const HistorySidebar = ({
             currentPage={generationPage}
             totalPages={generationTotalPages}
             onPageChange={onGenerationPageChange}
-            onItemClick={undefined}
+            onItemClick={handleGenerationRecordClick} 
             getItemText={(item) =>
               item.generated_text?.slice(0, 80) ||
+              item.result?.article?.slice(0, 80) ||
               item.prompt?.slice(0, 80) ||
               "No text"
             }

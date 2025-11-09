@@ -31,6 +31,11 @@ type GenerationRecord = {
     style?: string;
     domain?: string;
   };
+  result?: {
+    article?: string;
+    summary?: string;
+    [key: string]: any;
+  };
 };
 
 type GenerationTabProps = {
@@ -46,7 +51,36 @@ const GenerationTab = ({
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Filter records based on selected filter and variant
+  const handleRecordClick = async (record: GenerationRecord) => {
+    try {
+      const recordId = record._id;
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+      // 1️⃣ generate PDF
+      await fetch(`${baseUrl}/api/generation/history/${recordId}/generate_pdf`, {
+        method: "POST",
+      });
+
+      // 2️⃣ download PDF
+      const res = await fetch(`${baseUrl}/api/generation/history/${recordId}/pdf`);
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `generation_${recordId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error(err);
+      alert("❌ Failed to export PDF.");
+    }
+  };
+
+
   const filteredRecords = selectedFilter
     ? generationRecords.filter((item) => {
         if (variant === "style") {
@@ -57,7 +91,10 @@ const GenerationTab = ({
       })
     : [];
 
-  const totalPages = calculateTotalPages(filteredRecords.length, ITEMS_PER_PAGE);
+  const totalPages = calculateTotalPages(
+    filteredRecords.length,
+    ITEMS_PER_PAGE
+  );
 
   const handleVariantChange = (newVariant: "style" | "domain") => {
     setVariant(newVariant);
@@ -75,9 +112,12 @@ const GenerationTab = ({
     setCurrentPage(1);
   };
 
-  // Get current filters based on variant
-  const currentFilters = variant === "style" ? STYLE_FILTERS : DOMAIN_FILTERS;
-  const currentStats = variant === "style" ? generationStats.byStyle : generationStats.byDomain;
+  const currentFilters =
+    variant === "style" ? STYLE_FILTERS : DOMAIN_FILTERS;
+  const currentStats =
+    variant === "style"
+      ? generationStats.byStyle
+      : generationStats.byDomain;
 
   return (
     <TabsContent value="generation" className="mt-6">
@@ -136,8 +176,14 @@ const GenerationTab = ({
           itemsPerPage={ITEMS_PER_PAGE}
           onPageChange={setCurrentPage}
           onClearFilter={handleClearFilter}
+          onRecordClick={handleRecordClick} // ✅ 点击事件
           renderText={(record) =>
-            getRecordPreview(record.generated_text || record.prompt)
+            getRecordPreview(
+              record.generated_text ||
+                record.result?.article ||
+                record.result?.summary ||
+                record.prompt
+            )
           }
         />
       )}
