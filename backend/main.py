@@ -46,6 +46,7 @@ from config import Config
 from services.mongo_service import mongo_service
 from services.news_service import NewsService
 from services.pdf_service import PDFService
+from utils.security import create_access_token, require_active_user
 
 # Configure logging
 logging.basicConfig(
@@ -389,7 +390,20 @@ async def register_user(body: RegisterRequest, request: Request):
             })
     except Exception:
         pass
-    return {"success": True, "user_id": str(inserted.inserted_id)}
+    access_token = create_access_token(
+        str(inserted.inserted_id),
+        additional_claims={
+            "username": body.username,
+            "email": str(body.email),
+        },
+    )
+    return {
+        "success": True,
+        "user_id": str(inserted.inserted_id),
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": Config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    }
 
 @app.post("/api/auth/login")
 async def login_user(body: LoginRequest, request: Request):
@@ -404,6 +418,8 @@ async def login_user(body: LoginRequest, request: Request):
     })
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=403, detail="User account is inactive")
     hp = _hash_password(body.password, salt=user.get("salt"))
     if hp["password_hash"] != user.get("password_hash"):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -429,7 +445,41 @@ async def login_user(body: LoginRequest, request: Request):
             })
     except Exception:
         pass
-    return {"success": True, "username": user.get("username"), "email": user.get("email")}
+    access_token = create_access_token(
+        str(user["_id"]),
+        additional_claims={
+            "username": user.get("username"),
+            "email": user.get("email"),
+        },
+    )
+    return {
+        "success": True,
+        "username": user.get("username"),
+        "email": user.get("email"),
+        "user_id": str(user["_id"]),
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": Config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    }
+
+
+@app.get("/api/auth/me")
+async def get_me(current_user: Dict[str, Any] = Depends(require_active_user)):
+    """Return the authenticated user's profile."""
+    return {
+        "success": True,
+        "user": {
+            "user_id": str(current_user.get("_id", current_user.get("id"))),
+            "username": current_user.get("username"),
+            "email": current_user.get("email"),
+            "display_name": current_user.get("display_name"),
+            "avatar_url_or_b64": current_user.get("avatar_url_or_b64"),
+            "role": current_user.get("role", "user"),
+            "is_active": current_user.get("is_active", True),
+            "created_at": current_user.get("created_at"),
+            "last_login_at": current_user.get("last_login_at"),
+        },
+    }
 
 @app.post("/api/auth/firebase_sync")
 async def firebase_sync(body: FirebaseSyncRequest, request: Request):
@@ -624,11 +674,18 @@ async def baseline_detection(
     request: DetectionRequest,
     service: Any = Depends(get_detection_service),
     vision: Any = Depends(get_vision_service),
+    current_user: Dict[str, Any] = Depends(require_active_user),
     http_request: Request = None
 ):
     """Baseline detection"""
     try:
         logger.info(f"Baseline detection request for text: {request.text[:100]}...")
+        user_object_id = _current_user_object_id(current_user)
+        user_summary = {
+            "id": str(user_object_id),
+            "username": current_user.get("username"),
+            "email": current_user.get("email"),
+        }
         # Auto-generate description from image if text is empty
         req_text = (request.text or '').strip()
         if (not req_text) and request.image_url_or_b64:
@@ -655,7 +712,8 @@ async def baseline_detection(
                     "text": req_text or request.text,
                     "image_url_or_b64": request.image_url_or_b64,
                     "result": result,
-                    "created_at": datetime.utcnow().isoformat()
+                    "created_at": datetime.utcnow().isoformat(),
+                    "user_id": user_object_id,
                 })
                 
                 # Generate PDF if auto-generate is enabled
@@ -686,7 +744,7 @@ async def baseline_detection(
             if mongo_service.is_connected():
                 mongo_service.insert_one("user_activity_log", {
                     "action": "detect_baseline",
-                    "user": {},
+                    "user": user_summary,
                     "request_meta": {
                         "text_preview": (req_text or request.text)[:300],
                         "image_provided": bool(request.image_url_or_b64),
@@ -718,6 +776,7 @@ async def improved_detection_endpoint(
     detection_service: Any = Depends(get_detection_service),
     improved_service: Any = Depends(get_improved_detection),
     vision: Any = Depends(get_vision_service),
+    current_user: Dict[str, Any] = Depends(require_active_user),
     http_request: Request = None
 ):
     """Improved detection with customizable configuration"""
@@ -739,6 +798,12 @@ async def improved_detection_endpoint(
         # Extract custom configuration
         config = request.detection_config.dict() if request.detection_config else {}
         logger.info(f"Detection configuration: {config}")
+        user_object_id = _current_user_object_id(current_user)
+        user_summary = {
+            "id": str(user_object_id),
+            "username": current_user.get("username"),
+            "email": current_user.get("email"),
+        }
         
         if request.use_improved_detection:
             # Execute baseline detection
@@ -765,9 +830,10 @@ async def improved_detection_endpoint(
                         "config": config,
                         "baseline": baseline_results,
                         "result": improved_results,
-                        "created_at": datetime.utcnow().isoformat()
+                        "created_at": datetime.utcnow().isoformat(),
+                        "user_id": user_object_id,
                     })
-                    
+
                     # Generate PDF if auto-generate is enabled
                     if Config.PDF_AUTO_GENERATE and inserted_id:
                         try:
@@ -798,7 +864,7 @@ async def improved_detection_endpoint(
                 if mongo_service.is_connected():
                     mongo_service.insert_one("user_activity_log", {
                         "action": "detect_improved",
-                        "user": {},
+                        "user": user_summary,
                     "request_meta": {
                             "text_preview": (req_text or request.text)[:300],
                             "use_improved": True,
@@ -833,7 +899,7 @@ async def improved_detection_endpoint(
                 if mongo_service.is_connected():
                     mongo_service.insert_one("user_activity_log", {
                         "action": "detect_baseline",
-                        "user": {},
+                        "user": user_summary,
                     "request_meta": {
                             "text_preview": (req_text or request.text)[:300],
                             "image_provided": bool(request.image_url_or_b64),
@@ -866,11 +932,18 @@ async def generate_single(
     service: Any = Depends(get_generation_service),
     news_service: Any = Depends(get_news_service),
     vision: Any = Depends(get_vision_service),
+    current_user: Dict[str, Any] = Depends(require_active_user),
     http_request: Request = None
 ):
     """Generate single fake news sample - automatically searches for real news and generates based on it"""
     try:
         logger.info(f"Generation request for topic: {request.topic}")
+        user_object_id = _current_user_object_id(current_user)
+        user_summary = {
+            "id": str(user_object_id),
+            "username": current_user.get("username"),
+            "email": current_user.get("email"),
+        }
         # If topic empty but image provided, auto generate topic from image
         req_topic_override = None
         if (not (request.topic or '').strip()) and getattr(request, 'image_url_or_b64', None):
@@ -1071,7 +1144,8 @@ async def generate_single(
                     "image_url_or_b64": getattr(request, 'image_url_or_b64', None),
                     "params": request_dict,
                     "result": result,
-                    "created_at": datetime.utcnow().isoformat()
+                    "created_at": datetime.utcnow().isoformat(),
+                    "user_id": user_object_id,
                 })
                 logger.info(f"Successfully saved generation result to MongoDB")
                 
@@ -1106,7 +1180,7 @@ async def generate_single(
             if mongo_service.is_connected():
                 mongo_service.insert_one("user_activity_log", {
                     "action": "generate_single",
-                    "user": {},
+                    "user": user_summary,
                     "request_meta": {
                         "topic": req_topic_override or request.topic,
                         "strategy": request.strategy,
@@ -1137,11 +1211,18 @@ async def generate_single(
 async def generate_batch(
     request: BatchGenerationRequest,
     service: Any = Depends(get_generation_service),
+    current_user: Dict[str, Any] = Depends(require_active_user),
     http_request: Request = None
 ):
     """Batch generate fake news samples"""
     try:
         logger.info(f"Batch generation request for {len(request.topics)} topics")
+        user_object_id = _current_user_object_id(current_user)
+        user_summary = {
+            "id": str(user_object_id),
+            "username": current_user.get("username"),
+            "email": current_user.get("email"),
+        }
         
         results = service.generate_batch(
             topics=request.topics,
@@ -1158,7 +1239,8 @@ async def generate_batch(
                         "model_type": r.get("model"),
                         "params": {"strategy": request.strategies[0] if request.strategies else None, "samples_per_topic": request.samples_per_topic or 1},
                         "result": r,
-                        "created_at": datetime.utcnow().isoformat()
+                        "created_at": datetime.utcnow().isoformat(),
+                        "user_id": user_object_id,
                     })
                     
                     # Generate PDF if auto-generate is enabled
@@ -1189,7 +1271,7 @@ async def generate_batch(
             if mongo_service.is_connected():
                 mongo_service.insert_one("user_activity_log", {
                     "action": "generate_batch",
-                    "user": {},
+                    "user": user_summary,
                     "request_meta": {"topics": len(request.topics), "samples_per_topic": request.samples_per_topic or 1},
                     "result_meta": {"ok": True, "total": len(results)},
                     "client": _client_info(http_request),
@@ -1346,7 +1428,6 @@ class HistoryQuery(BaseModel):
     page: Optional[int] = 1
     page_size: Optional[int] = 10
     q: Optional[str] = None  # text/topic keyword
-    user_id: Optional[str] = None  # 
     image_only: Optional[bool] = False
 
 def _pagination_params(page: Optional[int], page_size: Optional[int]) -> Dict[str, int]:
@@ -1354,27 +1435,47 @@ def _pagination_params(page: Optional[int], page_size: Optional[int]) -> Dict[st
     ps = max(1, min(int(page_size or 10), 100))
     return {"skip": (p - 1) * ps, "limit": ps}
 
+
+def _ensure_object_id(value: Any) -> ObjectId:
+    """
+    Coerce a value to ObjectId, raising HTTPException if invalid.
+    """
+    if isinstance(value, ObjectId):
+        return value
+    if isinstance(value, str) and ObjectId.is_valid(value):
+        return ObjectId(value)
+    raise HTTPException(status_code=400, detail="Invalid user identifier")
+
+
+def _current_user_object_id(user: Dict[str, Any]) -> ObjectId:
+    """
+    Resolve the ObjectId for the current user.
+    """
+    if "_id" in user:
+        return _ensure_object_id(user["_id"])
+    if "id" in user:
+        return _ensure_object_id(user["id"])
+    raise HTTPException(status_code=400, detail="User identifier missing")
+
 @app.get("/api/detection/history")
 async def get_detection_history(
     page: int = 1,
     page_size: int = 10,
     q: Optional[str] = None,
-    user_id: Optional[str] = None,
-    image_only: bool = False
+    image_only: bool = False,
+    current_user: Dict[str, Any] = Depends(require_active_user)
 ):
     if not mongo_service.is_connected():
         raise HTTPException(status_code=503, detail="Database not connected")
     col = mongo_service.get_collection("detection_results")
-    query: Dict[str, Any] = {}
+    user_object_id = _current_user_object_id(current_user)
+    query: Dict[str, Any] = {"user_id": user_object_id}
     if q:
         # 优先使用文本索引；没有则回退到正则
         query["$or"] = [
             {"text": {"$regex": q, "$options": "i"}},
             {"type": {"$regex": q, "$options": "i"}}
         ]
-    if user_id:
-        # 仅当文档包含 user_id 时生效（向后兼容，不会报错）
-        query["user_id"] = user_id
     if image_only:
         query["image_url_or_b64"] = {"$ne": None}
     pg = _pagination_params(page, page_size)
@@ -1385,12 +1486,14 @@ async def get_detection_history(
     for it in items:
         if it.get("_id") is not None:
             it["_id"] = str(it["_id"])  # type: ignore
+        if isinstance(it.get("user_id"), ObjectId):
+            it["user_id"] = str(it["user_id"])
     return {"success": True, "total": total, "page": page, "page_size": page_size, "items": items}
 
 @app.delete("/api/detection/history/{record_id}")
 async def delete_detection_record(
     record_id: str,
-    user_id: Optional[str] = None
+    current_user: Dict[str, Any] = Depends(require_active_user)
 ):
     """
     删除指定的检测记录
@@ -1414,23 +1517,16 @@ async def delete_detection_record(
     col = mongo_service.get_collection("detection_results")
     
     # 构建查询条件
-    query: Dict[str, Any] = {"_id": object_id}
-    
-    # 如果提供了user_id，验证记录是否属于该用户
-    if user_id:
-        query["user_id"] = user_id
+    user_object_id = _current_user_object_id(current_user)
+    query: Dict[str, Any] = {"_id": object_id, "user_id": user_object_id}
     
     # 先查找记录是否存在
     record = col.find_one(query)
     if not record:
-        # 如果提供了user_id，可能是记录不存在或不属于该用户
-        if user_id:
-            raise HTTPException(
-                status_code=404, 
-                detail="Record not found or does not belong to the specified user"
-            )
-        else:
-            raise HTTPException(status_code=404, detail="Record not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Record not found or does not belong to the current user"
+        )
     
     # 删除记录
     try:
@@ -1448,7 +1544,10 @@ async def delete_detection_record(
         raise HTTPException(status_code=500, detail=f"Failed to delete record: {str(e)}")
 
 @app.get("/api/detection/history/{record_id}/pdf")
-async def download_detection_pdf(record_id: str):
+async def download_detection_pdf(
+    record_id: str,
+    current_user: Dict[str, Any] = Depends(require_active_user)
+):
     """
     下载检测结果的PDF文件
     
@@ -1471,6 +1570,11 @@ async def download_detection_pdf(record_id: str):
     
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
+
+    user_object_id = _current_user_object_id(current_user)
+    record_user_id = record.get("user_id")
+    if record_user_id is not None and _ensure_object_id(record_user_id) != user_object_id:
+        raise HTTPException(status_code=403, detail="You do not have access to this record")
     
     # Check if PDF exists
     pdf_path = record.get("pdf_path")
@@ -1494,7 +1598,10 @@ async def download_detection_pdf(record_id: str):
     )
 
 @app.get("/api/generation/history/{record_id}/pdf")
-async def download_generation_pdf(record_id: str):
+async def download_generation_pdf(
+    record_id: str,
+    current_user: Dict[str, Any] = Depends(require_active_user)
+):
     """
     下载生成结果的PDF文件
     
@@ -1517,6 +1624,11 @@ async def download_generation_pdf(record_id: str):
     
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
+
+    user_object_id = _current_user_object_id(current_user)
+    record_user_id = record.get("user_id")
+    if record_user_id is not None and _ensure_object_id(record_user_id) != user_object_id:
+        raise HTTPException(status_code=403, detail="You do not have access to this record")
     
     # Check if PDF exists
     pdf_path = record.get("pdf_path")
@@ -1540,7 +1652,10 @@ async def download_generation_pdf(record_id: str):
     )
 
 @app.post("/api/detection/history/{record_id}/generate_pdf")
-async def generate_detection_pdf_on_demand(record_id: str):
+async def generate_detection_pdf_on_demand(
+    record_id: str,
+    current_user: Dict[str, Any] = Depends(require_active_user)
+):
     """
     按需生成检测结果的PDF
     
@@ -1563,6 +1678,11 @@ async def generate_detection_pdf_on_demand(record_id: str):
     
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
+    
+    user_object_id = _current_user_object_id(current_user)
+    record_user_id = record.get("user_id")
+    if record_user_id is not None and _ensure_object_id(record_user_id) != user_object_id:
+        raise HTTPException(status_code=403, detail="You do not have access to this record")
     
     # Generate PDF
     try:
@@ -1589,7 +1709,10 @@ async def generate_detection_pdf_on_demand(record_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
 @app.post("/api/generation/history/{record_id}/generate_pdf")
-async def generate_generation_pdf_on_demand(record_id: str):
+async def generate_generation_pdf_on_demand(
+    record_id: str,
+    current_user: Dict[str, Any] = Depends(require_active_user)
+):
     """
     按需生成生成结果的PDF
     
@@ -1612,6 +1735,11 @@ async def generate_generation_pdf_on_demand(record_id: str):
     
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
+    
+    user_object_id = _current_user_object_id(current_user)
+    record_user_id = record.get("user_id")
+    if record_user_id is not None and _ensure_object_id(record_user_id) != user_object_id:
+        raise HTTPException(status_code=403, detail="You do not have access to this record")
     
     # Generate PDF
     try:
@@ -1642,20 +1770,19 @@ async def get_generation_history(
     page: int = 1,
     page_size: int = 10,
     q: Optional[str] = None,
-    user_id: Optional[str] = None,
-    image_only: bool = False
+    image_only: bool = False,
+    current_user: Dict[str, Any] = Depends(require_active_user)
 ):
     if not mongo_service.is_connected():
         raise HTTPException(status_code=503, detail="Database not connected")
     col = mongo_service.get_collection("generation_results")
-    query: Dict[str, Any] = {}
+    user_object_id = _current_user_object_id(current_user)
+    query: Dict[str, Any] = {"user_id": user_object_id}
     if q:
         query["$or"] = [
             {"topic": {"$regex": q, "$options": "i"}},
             {"strategy": {"$regex": q, "$options": "i"}},
         ]
-    if user_id:
-        query["user_id"] = user_id
     if image_only:
         query["image_url_or_b64"] = {"$ne": None}
     pg = _pagination_params(page, page_size)
@@ -1665,18 +1792,46 @@ async def get_generation_history(
     for it in items:
         if it.get("_id") is not None:
             it["_id"] = str(it["_id"])  # type: ignore
+        if isinstance(it.get("user_id"), ObjectId):
+            it["user_id"] = str(it["user_id"])
     return {"success": True, "total": total, "page": page, "page_size": page_size, "items": items}
 
 # Legacy endpoints (for backward compatibility)
 @app.post("/generate_text")
-async def generate_text_legacy(request: GenerationRequest):
+async def generate_text_legacy(
+    request: GenerationRequest,
+    service: Any = Depends(get_generation_service),
+    news_service: Any = Depends(get_news_service),
+    vision: Any = Depends(get_vision_service),
+    current_user: Dict[str, Any] = Depends(require_active_user),
+    http_request: Request = None
+):
     """Legacy generation endpoint"""
-    return await generate_single(request)
+    return await generate_single(
+        request=request,
+        service=service,
+        news_service=news_service,
+        vision=vision,
+        current_user=current_user,
+        http_request=http_request,
+    )
 
 @app.post("/detect_text")
-async def detect_text_legacy(request: DetectionRequest):
+async def detect_text_legacy(
+    request: DetectionRequest,
+    service: Any = Depends(get_detection_service),
+    vision: Any = Depends(get_vision_service),
+    current_user: Dict[str, Any] = Depends(require_active_user),
+    http_request: Request = None
+):
     """Legacy text detection endpoint"""
-    return await baseline_detection(request)
+    return await baseline_detection(
+        request=request,
+        service=service,
+        vision=vision,
+        current_user=current_user,
+        http_request=http_request,
+    )
 
 @app.post("/detect_multimodal")
 async def detect_multimodal_legacy(request: DetectionRequest):

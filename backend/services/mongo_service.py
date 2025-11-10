@@ -83,8 +83,10 @@ class MongoService:
                 pass
             self.db["detection_results"].create_index([("created_at", -1)])
             self.db["detection_results"].create_index([("type", 1)])
+            self.db["detection_results"].create_index([("user_id", 1), ("created_at", -1)])
             self.db["generation_results"].create_index([("created_at", -1)])
             self.db["generation_results"].create_index([("topic", 1)])
+            self.db["generation_results"].create_index([("user_id", 1), ("created_at", -1)])
         except Exception:
             pass
 
