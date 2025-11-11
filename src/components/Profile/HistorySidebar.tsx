@@ -59,15 +59,38 @@ const HistorySidebar = ({
       const recordId = record._id;
       const baseUrl =
         import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      const token = localStorage.getItem("access_token");
 
-      await fetch(`${baseUrl}/api/generation/history/${recordId}/generate_pdf`, {
-        method: "POST",
-      });
+      const generateResponse = await fetch(
+        `${baseUrl}/api/generation/history/${recordId}/generate_pdf`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (!generateResponse.ok) {
+        const errText = await generateResponse.text();
+        console.error("PDF generation failed:", errText);
+        throw new Error("Failed to generate PDF on server");
+      }
 
       const res = await fetch(
-        `${baseUrl}/api/generation/history/${recordId}/pdf`
+        `${baseUrl}/api/generation/history/${recordId}/pdf`,
+        {
+          headers: {
+            "Authorization": token ? `Bearer ${token}` : "",
+          },
+        }
       );
-      if (!res.ok) throw new Error("Failed to download PDF");
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("PDF download failed:", errText);
+        throw new Error("Failed to download PDF");
+      }
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -113,7 +136,7 @@ const HistorySidebar = ({
             currentPage={generationPage}
             totalPages={generationTotalPages}
             onPageChange={onGenerationPageChange}
-            onItemClick={handleGenerationRecordClick} 
+            onItemClick={handleGenerationRecordClick}
             getItemText={(item) =>
               item.generated_text?.slice(0, 80) ||
               item.result?.article?.slice(0, 80) ||

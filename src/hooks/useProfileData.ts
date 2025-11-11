@@ -28,7 +28,7 @@ type GenerationRecord = {
   };
 };
 
-// Hook for user profile data
+// ✅ Hook for user profile data
 export const useUserProfile = () => {
   const [userData, setUserData] = useState({
     username: "User",
@@ -59,11 +59,9 @@ export const useUserProfile = () => {
   }) => {
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-      const raw = localStorage.getItem("user");
-      const u: StoredUser = raw ? JSON.parse(raw) : {};
+      const token = localStorage.getItem("access_token");
 
       const payload = {
-        username_or_email: u.email || data.email || u.displayName || "user@example.com",
         username: data.username,
         email: data.email,
         avatar_url_or_b64: data.photoURL,
@@ -71,7 +69,10 @@ export const useUserProfile = () => {
 
       const res = await fetch(`${baseUrl}/api/auth/update_profile`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": token ? `Bearer ${token}` : "",
+        },
         body: JSON.stringify(payload),
       });
 
@@ -80,6 +81,9 @@ export const useUserProfile = () => {
         throw new Error(responseData.detail || "Backend update failed");
       }
 
+      // ✅ 同步到本地
+      const raw = localStorage.getItem("user");
+      const u: StoredUser = raw ? JSON.parse(raw) : {};
       const updated: StoredUser = {
         ...u,
         displayName: data.username,
@@ -94,26 +98,13 @@ export const useUserProfile = () => {
     } catch (err) {
       console.error("update_profile failed:", err);
       alert("⚠️ Failed to update remote database, local profile saved instead.");
-      
-      const raw = localStorage.getItem("user");
-      const u: StoredUser = raw ? JSON.parse(raw) : {};
-      const updated: StoredUser = {
-        ...u,
-        displayName: data.username,
-        email: data.email,
-        photoURL: data.photoURL,
-        uid: u.uid ?? `local-${Date.now()}`,
-        provider: u.provider ?? "local",
-      };
-      localStorage.setItem("user", JSON.stringify(updated));
-      setUserData(data);
     }
   };
 
   return { userData, updateProfile };
 };
 
-// Hook for detection history
+// ✅ Hook for detection history
 export const useDetectionHistory = () => {
   const [history, setHistory] = useState<DetectionRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,7 +116,15 @@ export const useDetectionHistory = () => {
         setLoading(true);
         setError(null);
         const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-        const res = await fetch(`${baseUrl}/api/detection/history?page=1&page_size=9999`);
+        const token = localStorage.getItem("access_token");
+
+        const res = await fetch(`${baseUrl}/api/detection/history?page=1&page_size=9999`, {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": token ? `Bearer ${token}` : "",
+          },
+        });
+
         const data = await res.json();
         if (!data.success) throw new Error("Failed to fetch history");
         setHistory(data.items || []);
@@ -141,7 +140,7 @@ export const useDetectionHistory = () => {
   return { history, loading, error };
 };
 
-// Hook for generation history
+// ✅ Hook for generation history
 export const useGenerationHistory = () => {
   const [history, setHistory] = useState<GenerationRecord[]>([]);
 
@@ -149,7 +148,15 @@ export const useGenerationHistory = () => {
     const fetchGenerationHistory = async () => {
       try {
         const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-        const res = await fetch(`${baseUrl}/api/generation/history?page=1&page_size=9999`);
+        const token = localStorage.getItem("access_token");
+
+        const res = await fetch(`${baseUrl}/api/generation/history?page=1&page_size=9999`, {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": token ? `Bearer ${token}` : "",
+          },
+        });
+
         const data = await res.json();
         if (data.success) {
           setHistory(data.items || []);

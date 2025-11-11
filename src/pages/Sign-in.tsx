@@ -26,6 +26,9 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
     setError(null);
     try {
       const res = await apiService.login(form.email, form.password);
+      if (res.access_token) {
+        localStorage.setItem("access_token", res.access_token);
+      }
       localStorage.setItem(
         "user",
         JSON.stringify({

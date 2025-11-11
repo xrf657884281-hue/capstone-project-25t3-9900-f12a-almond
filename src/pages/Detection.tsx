@@ -108,10 +108,20 @@ const Detection = () => {
     setError(null);
     setIsLoading(true);
     try {
-      const result = await apiService.detectImproved({
-        text: contentToDetect,
-        use_improved_detection: true,
-      });
+      const token = localStorage.getItem("access_token");
+
+      const result = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/detect/improved`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({
+          text: contentToDetect,
+          use_improved_detection: true,
+        }),
+      }).then((r) => r.json());
+
 
       if (result.success) {
         const finalPrediction = result.result.final_prediction;

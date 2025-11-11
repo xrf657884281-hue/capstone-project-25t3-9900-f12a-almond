@@ -129,10 +129,20 @@ const Generate = () => {
 
       const finalPrompt = `${parts.join(" ")} about: ${basePrompt}`;
 
-      const response = await apiService.generateSingle({
-        topic: finalPrompt,
-        image_url_or_b64: image ? await fileToBase64(image) : undefined,
-      });
+      const token = localStorage.getItem("access_token");
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/generate/single`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({
+          topic: finalPrompt,
+          image_url_or_b64: image ? await fileToBase64(image) : undefined,
+        }),
+      }).then((r) => r.json());
+
 
       if (response.success && response.result.article) {
         let articleText = response.result.article;
@@ -180,12 +190,19 @@ const Generate = () => {
     setGenerated("");
     setSourceUrl("");
     setVisionText("");
-    setImagePreview(null); 
+    setImagePreview(null);
     setError(null);
     setTone("Normal");
     setTopic("General");
     if (inputRef.current) inputRef.current.value = "";
-    localStorage.clear();
+    [
+      "generatedNews",
+      "newsInput",
+      "newsTone",
+      "newsTopic",
+      "visionText",
+      "sourceUrl"
+    ].forEach((key) => localStorage.removeItem(key));
   };
 
   const handleCopy = async () => {
