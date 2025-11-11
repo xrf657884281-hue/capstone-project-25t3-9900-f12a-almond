@@ -106,4 +106,28 @@ def require_active_user(current_user: Dict[str, Any] = Depends(get_current_user)
     return current_user
 
 
+def get_optional_user(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
+) -> Optional[Dict[str, Any]]:
+    """Return current user if token provided, otherwise None."""
+    if credentials is None:
+        return None
+    try:
+        return get_current_user(credentials)
+    except TokenError:
+        return None
+    except HTTPException:
+        return None
+
+
+def get_optional_active_user(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
+) -> Optional[Dict[str, Any]]:
+    """Return active user if token valid, otherwise None."""
+    user = get_optional_user(credentials)
+    if user and not user.get("is_active", True):
+        return None
+    return user
+
+
 

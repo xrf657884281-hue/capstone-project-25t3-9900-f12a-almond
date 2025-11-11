@@ -17,7 +17,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import logging
 import os
 from datetime import datetime
@@ -932,18 +932,13 @@ async def generate_single(
     service: Any = Depends(get_generation_service),
     news_service: Any = Depends(get_news_service),
     vision: Any = Depends(get_vision_service),
-    current_user: Dict[str, Any] = Depends(require_active_user),
     http_request: Request = None
 ):
     """Generate single fake news sample - automatically searches for real news and generates based on it"""
     try:
         logger.info(f"Generation request for topic: {request.topic}")
-        user_object_id = _current_user_object_id(current_user)
-        user_summary = {
-            "id": str(user_object_id),
-            "username": current_user.get("username"),
-            "email": current_user.get("email"),
-        }
+        user_object_id = None
+        user_summary: Dict[str, Any] = {}
         # If topic empty but image provided, auto generate topic from image
         req_topic_override = None
         if (not (request.topic or '').strip()) and getattr(request, 'image_url_or_b64', None):
@@ -1107,6 +1102,141 @@ async def generate_single(
             except Exception as e:
                 logger.warning(f"Failed to search news: {e}")
         
+        def infer_domain_style_from_text(text: str) -> Tuple[Optional[str], Optional[str]]:
+            if not text:
+                return None, None
+            text_lower = text.lower()
+
+            domain_keywords: Dict[str, List[Tuple[str, float]]] = {
+                "politics": [
+                    ("government", 1.5), ("election", 1.7), ("policy", 1.1), ("president", 1.4),
+                    ("minister", 1.2), ("parliament", 1.4), ("congress", 1.4), ("senate", 1.2),
+                    ("campaign", 1.1), ("diplomatic", 1.1), ("bill", 0.8), ("legislation", 1.2)
+                ],
+                "business": [
+                    ("market", 1.4), ("economy", 1.3), ("finance", 1.3), ("company", 1.0),
+                    ("startup", 1.0), ("investment", 1.2), ("revenue", 1.3), ("profit", 1.3),
+                    ("corporate", 1.1), ("stock", 1.2), ("merger", 1.2), ("shareholder", 1.2),
+                    ("earnings", 1.3), ("quarter", 0.9)
+                ],
+                "sports": [
+                    ("match", 1.2), ("game", 1.0), ("tournament", 1.4), ("league", 1.3),
+                    ("player", 1.0), ("coach", 1.0), ("season", 1.1), ("score", 1.0),
+                    ("championship", 1.5), ("olympic", 1.5), ("victory", 1.1), ("defeat", 1.1),
+                    ("goal", 1.0), ("playoff", 1.3)
+                ],
+                "technology": [
+                    ("technology", 1.3), ("tech", 1.3), ("software", 1.2), ("hardware", 1.2),
+                    ("ai", 1.5), ("artificial intelligence", 1.7), ("robot", 1.1),
+                    ("digital", 1.0), ("cyber", 1.2), ("innovation", 1.2), ("cloud", 1.1),
+                    ("startup", 1.0), ("algorithm", 1.3), ("data", 1.0)
+                ],
+                "health": [
+                    ("hospital", 1.2), ("vaccine", 1.5), ("disease", 1.3), ("health", 1.1),
+                    ("medical", 1.3), ("doctor", 1.2), ("patients", 1.1), ("virus", 1.4),
+                    ("nutrition", 1.0), ("therapy", 1.1), ("clinical", 1.2), ("public health", 1.4)
+                ],
+                "environment": [
+                    ("climate", 1.4), ("environment", 1.2), ("wildfire", 1.6), ("sustainability", 1.2),
+                    ("pollution", 1.3), ("ecosystem", 1.2), ("emissions", 1.3), ("renewable", 1.1),
+                    ("conservation", 1.2), ("carbon", 1.1), ("earthquake", 1.3), ("flood", 1.3)
+                ],
+                "science": [
+                    ("research", 1.2), ("scientists", 1.3), ("study", 1.2), ("laboratory", 1.1),
+                    ("discovered", 1.2), ("experiment", 1.1), ("NASA", 1.3), ("space", 1.1),
+                    ("astronomy", 1.3), ("physics", 1.2), ("biology", 1.2), ("university", 0.9)
+                ],
+                "crime": [
+                    ("investigation", 1.2), ("suspect", 1.2), ("police", 1.1), ("fraud", 1.3),
+                    ("arrested", 1.2), ("charges", 1.1), ("lawsuit", 1.1), ("security breach", 1.4),
+                    ("corruption", 1.2)
+                ],
+                "entertainment": [
+                    ("festival", 1.3), ("film", 1.1), ("movie", 1.1), ("celebrity", 1.2),
+                    ("concert", 1.3), ("award", 1.2), ("music", 1.1), ("series", 1.0),
+                    ("premiere", 1.2), ("hollywood", 1.4), ("box office", 1.3)
+                ],
+            }
+
+            sensational_keywords = [
+                "breaking", "crisis", "disaster", "urgent", "scandal", "shocking",
+                "attack", "protest", "violence", "alert", "storm", "emergency",
+                "explosion", "tragedy", "wildfire", "threatens"
+            ]
+            fun_keywords = [
+                "festival", "celebration", "party", "music", "concert", "holiday",
+                "comedy", "event", "kids", "fun", "entertainment", "parade", "picnic"
+            ]
+
+            domain_scores: Dict[str, float] = {key: 0.0 for key in domain_keywords}
+            for domain_key, keywords in domain_keywords.items():
+                for keyword, weight in keywords:
+                    if keyword in text_lower:
+                        domain_scores[domain_key] += weight
+
+            best_domain = max(domain_scores, key=domain_scores.get)
+            inferred_domain = best_domain if domain_scores[best_domain] >= 1.0 else None
+
+            inferred_style: Optional[str]
+            style_scores: Dict[str, float] = {
+                "sensational": 0.0,
+                "fun": 0.0,
+                "formal": 0.0,
+                "normal": 0.0,
+            }
+
+            for kw in sensational_keywords:
+                if kw in text_lower:
+                    style_scores["sensational"] += 1.2
+            style_scores["sensational"] += text_lower.count("!") * 0.4
+            if "breaking news" in text_lower:
+                style_scores["sensational"] += 1.0
+
+            for kw in fun_keywords:
+                if kw in text_lower:
+                    style_scores["fun"] += 1.1
+            if "festival" in text_lower or "celebration" in text_lower:
+                style_scores["fun"] += 0.6
+
+            formal_markers = [
+                ("according to", 1.0), ("official", 0.8), ("statement", 0.7),
+                ("report", 0.8), ("conference", 0.7), ("authorities", 0.9),
+                ("analysis", 0.8), ("research", 0.8)
+            ]
+            for kw, weight in formal_markers:
+                if kw in text_lower:
+                    style_scores["formal"] += weight
+            if inferred_domain in {"politics", "business", "science"}:
+                style_scores["formal"] += 0.6
+
+            neutral_markers = [
+                ("community", 0.4), ("local", 0.4), ("everyday", 0.3),
+                ("routine", 0.3), ("update", 0.3)
+            ]
+            for kw, weight in neutral_markers:
+                if kw in text_lower:
+                    style_scores["normal"] += weight
+
+            best_style = max(style_scores, key=style_scores.get)
+            if style_scores[best_style] < 0.6:
+                inferred_style = "normal"
+            else:
+                inferred_style = best_style
+
+            return inferred_domain, inferred_style
+
+        combined_text_for_inference = " ".join(
+            filter(None, [topic_text, source_text])
+        )
+        inferred_domain, inferred_style = infer_domain_style_from_text(combined_text_for_inference)
+
+        if not domain and inferred_domain:
+            domain = inferred_domain
+            logger.info(f"Inferred domain from content: {domain}")
+        if not style and inferred_style:
+            style = inferred_style
+            logger.info(f"Inferred style from content: {style}")
+
         # Prepare request_dict for MongoDB storage (used in both branches)
         request_dict = request.dict()
         if req_topic_override:
@@ -1137,7 +1267,7 @@ async def generate_single(
             if mongo_service.is_connected():
                 # Ensure strategy is set (required by MongoDB validator)
                 strategy_value = request.strategy if request.strategy else "loaded_language"
-                inserted_id = mongo_service.insert_one("generation_results", {
+                generation_doc = {
                     "topic": req_topic_override or request.topic,
                     "strategy": strategy_value,
                     "model_type": request.model_type,
@@ -1145,8 +1275,10 @@ async def generate_single(
                     "params": request_dict,
                     "result": result,
                     "created_at": datetime.utcnow().isoformat(),
-                    "user_id": user_object_id,
-                })
+                }
+                if user_object_id is not None:
+                    generation_doc["user_id"] = user_object_id
+                inserted_id = mongo_service.insert_one("generation_results", generation_doc)
                 logger.info(f"Successfully saved generation result to MongoDB")
                 
                 # Generate PDF if auto-generate is enabled
@@ -1180,7 +1312,7 @@ async def generate_single(
             if mongo_service.is_connected():
                 mongo_service.insert_one("user_activity_log", {
                     "action": "generate_single",
-                    "user": user_summary,
+                    "user": user_summary or {},
                     "request_meta": {
                         "topic": req_topic_override or request.topic,
                         "strategy": request.strategy,

@@ -504,7 +504,7 @@ TASK:
 - Ensure the new article would be judged false relative to the source.
 - Do NOT copy sentences; paraphrase professionally.
 - Include one dateline and a varied professional headline.
-- At the end, include a single line: "Original report: {source_url}" if a URL is provided.
+- Mention the original report naturally if needed, but do not include raw URLs in the body text.
 - CRITICAL: The generated article MUST be logically coherent and factually consistent within itself (even though false relative to source).
 - Ensure all manipulated facts connect logically and support the overall narrative.
 - Maintain professional journalistic structure (headline, dateline, lead, body paragraphs, quotes).
@@ -550,16 +550,6 @@ Write the complete manipulated article now about: {inferred_topic}."""
 
             generated_text = response.choices[0].message.content.strip()
             formatted_article = self.fake_news_generator._format_article(generated_text)
-
-            # Enforce last line contains the original URL if provided
-            if source_url:
-                url_line = f"Original report: {source_url}"
-                # Remove any existing different URL line variants and append the correct one
-                lines = [l for l in formatted_article.split('\n') if not l.strip().lower().startswith('original report:')]
-                if lines and lines[-1].strip():
-                    lines.append("")
-                lines.append(url_line)
-                formatted_article = '\n'.join(lines).strip()
 
             return {
                 "success": True,

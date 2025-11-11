@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
@@ -17,6 +17,8 @@ const Generate = () => {
   const [error, setError] = useState<string | null>(null);
   const [tone, setTone] = useState("Normal");
   const [topic, setTopic] = useState("General");
+  const [isToneAuto, setIsToneAuto] = useState(true);
+  const [isTopicAuto, setIsTopicAuto] = useState(true);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -35,9 +37,321 @@ const Generate = () => {
     const savedTopic = localStorage.getItem("newsTopic");
     if (savedTopic) setTopic(savedTopic);
 
+    const savedToneAuto = localStorage.getItem("newsToneAuto");
+    if (savedToneAuto !== null) {
+      setIsToneAuto(savedToneAuto !== "false");
+    } else {
+      localStorage.setItem("newsToneAuto", "true");
+    }
+
+    const savedTopicAuto = localStorage.getItem("newsTopicAuto");
+    if (savedTopicAuto !== null) {
+      setIsTopicAuto(savedTopicAuto !== "false");
+    } else {
+      localStorage.setItem("newsTopicAuto", "true");
+    }
+
     const savedVision = localStorage.getItem("visionText");
     if (savedVision) setVisionText(savedVision);
   }, []);
+
+  const inferAttributes = useCallback((text: string) => {
+    if (!text) {
+      return { topic: "General", tone: "Normal" };
+    }
+
+    const lower = text.toLowerCase();
+
+    const domainKeywords: Record<
+      string,
+      Array<{ keyword: string; weight: number }>
+    > = {
+      Politics: [
+        { keyword: "government", weight: 1.5 },
+        { keyword: "election", weight: 1.7 },
+        { keyword: "policy", weight: 1.1 },
+        { keyword: "president", weight: 1.4 },
+        { keyword: "minister", weight: 1.2 },
+        { keyword: "parliament", weight: 1.4 },
+        { keyword: "congress", weight: 1.4 },
+        { keyword: "senate", weight: 1.2 },
+        { keyword: "campaign", weight: 1.1 },
+        { keyword: "diplomatic", weight: 1.1 },
+        { keyword: "legislation", weight: 1.2 },
+        { keyword: "bill", weight: 0.8 }
+      ],
+      Business: [
+        { keyword: "market", weight: 1.4 },
+        { keyword: "economy", weight: 1.3 },
+        { keyword: "finance", weight: 1.3 },
+        { keyword: "company", weight: 1.0 },
+        { keyword: "startup", weight: 1.0 },
+        { keyword: "investment", weight: 1.2 },
+        { keyword: "revenue", weight: 1.3 },
+        { keyword: "profit", weight: 1.3 },
+        { keyword: "corporate", weight: 1.1 },
+        { keyword: "stock", weight: 1.2 },
+        { keyword: "merger", weight: 1.2 },
+        { keyword: "shareholder", weight: 1.2 },
+        { keyword: "earnings", weight: 1.3 },
+        { keyword: "quarter", weight: 0.9 }
+      ],
+      Sports: [
+        { keyword: "match", weight: 1.2 },
+        { keyword: "game", weight: 1.0 },
+        { keyword: "tournament", weight: 1.4 },
+        { keyword: "league", weight: 1.3 },
+        { keyword: "player", weight: 1.0 },
+        { keyword: "coach", weight: 1.0 },
+        { keyword: "season", weight: 1.1 },
+        { keyword: "score", weight: 1.0 },
+        { keyword: "championship", weight: 1.5 },
+        { keyword: "olympic", weight: 1.5 },
+        { keyword: "victory", weight: 1.1 },
+        { keyword: "defeat", weight: 1.1 },
+        { keyword: "goal", weight: 1.0 },
+        { keyword: "playoff", weight: 1.3 }
+      ],
+      Technology: [
+        { keyword: "technology", weight: 1.3 },
+        { keyword: "tech", weight: 1.3 },
+        { keyword: "software", weight: 1.2 },
+        { keyword: "hardware", weight: 1.2 },
+        { keyword: "ai", weight: 1.5 },
+        { keyword: "artificial intelligence", weight: 1.7 },
+        { keyword: "robot", weight: 1.1 },
+        { keyword: "digital", weight: 1.0 },
+        { keyword: "cyber", weight: 1.2 },
+        { keyword: "innovation", weight: 1.2 },
+        { keyword: "cloud", weight: 1.1 },
+        { keyword: "algorithm", weight: 1.3 },
+        { keyword: "data", weight: 1.0 }
+      ],
+      Health: [
+        { keyword: "hospital", weight: 1.2 },
+        { keyword: "vaccine", weight: 1.5 },
+        { keyword: "disease", weight: 1.3 },
+        { keyword: "health", weight: 1.1 },
+        { keyword: "medical", weight: 1.3 },
+        { keyword: "doctor", weight: 1.2 },
+        { keyword: "patients", weight: 1.1 },
+        { keyword: "virus", weight: 1.4 },
+        { keyword: "therapy", weight: 1.1 },
+        { keyword: "clinical", weight: 1.2 },
+        { keyword: "public health", weight: 1.4 }
+      ],
+      Environment: [
+        { keyword: "climate", weight: 1.4 },
+        { keyword: "environment", weight: 1.2 },
+        { keyword: "wildfire", weight: 1.6 },
+        { keyword: "sustainability", weight: 1.2 },
+        { keyword: "pollution", weight: 1.3 },
+        { keyword: "ecosystem", weight: 1.2 },
+        { keyword: "emissions", weight: 1.3 },
+        { keyword: "renewable", weight: 1.1 },
+        { keyword: "conservation", weight: 1.2 },
+        { keyword: "carbon", weight: 1.1 },
+        { keyword: "earthquake", weight: 1.3 },
+        { keyword: "flood", weight: 1.3 },
+        { keyword: "drought", weight: 1.3 }
+      ],
+      Science: [
+        { keyword: "research", weight: 1.2 },
+        { keyword: "scientists", weight: 1.3 },
+        { keyword: "study", weight: 1.2 },
+        { keyword: "laboratory", weight: 1.1 },
+        { keyword: "discovered", weight: 1.2 },
+        { keyword: "experiment", weight: 1.1 },
+        { keyword: "nasa", weight: 1.3 },
+        { keyword: "space", weight: 1.1 },
+        { keyword: "astronomy", weight: 1.3 },
+        { keyword: "physics", weight: 1.2 },
+        { keyword: "biology", weight: 1.2 },
+        { keyword: "university", weight: 0.9 }
+      ],
+      Crime: [
+        { keyword: "investigation", weight: 1.2 },
+        { keyword: "suspect", weight: 1.2 },
+        { keyword: "police", weight: 1.1 },
+        { keyword: "fraud", weight: 1.3 },
+        { keyword: "arrested", weight: 1.2 },
+        { keyword: "charges", weight: 1.1 },
+        { keyword: "lawsuit", weight: 1.1 },
+        { keyword: "corruption", weight: 1.2 },
+        { keyword: "security breach", weight: 1.4 }
+      ],
+      Entertainment: [
+        { keyword: "festival", weight: 1.3 },
+        { keyword: "film", weight: 1.1 },
+        { keyword: "movie", weight: 1.1 },
+        { keyword: "celebrity", weight: 1.2 },
+        { keyword: "concert", weight: 1.3 },
+        { keyword: "award", weight: 1.2 },
+        { keyword: "music", weight: 1.1 },
+        { keyword: "premiere", weight: 1.2 },
+        { keyword: "hollywood", weight: 1.4 },
+        { keyword: "box office", weight: 1.3 },
+        { keyword: "red carpet", weight: 1.2 }
+      ]
+    };
+
+    const sensationalPatterns = [
+      { keyword: "breaking", weight: 1.2 },
+      { keyword: "crisis", weight: 1.3 },
+      { keyword: "disaster", weight: 1.3 },
+      { keyword: "urgent", weight: 1.1 },
+      { keyword: "scandal", weight: 1.2 },
+      { keyword: "shocking", weight: 1.2 },
+      { keyword: "attack", weight: 1.2 },
+      { keyword: "protest", weight: 1.0 },
+      { keyword: "violence", weight: 1.2 },
+      { keyword: "emergency", weight: 1.2 },
+      { keyword: "explosion", weight: 1.3 },
+      { keyword: "tragedy", weight: 1.3 },
+      { keyword: "threatens", weight: 1.4 },
+      { keyword: "wildfire", weight: 1.4 }
+    ];
+
+    const funPatterns = [
+      { keyword: "festival", weight: 1.3 },
+      { keyword: "celebration", weight: 1.2 },
+      { keyword: "party", weight: 1.1 },
+      { keyword: "music", weight: 1.0 },
+      { keyword: "concert", weight: 1.2 },
+      { keyword: "holiday", weight: 1.1 },
+      { keyword: "comedy", weight: 1.0 },
+      { keyword: "event", weight: 1.0 },
+      { keyword: "kids", weight: 1.0 },
+      { keyword: "fun", weight: 1.0 },
+      { keyword: "parade", weight: 1.1 },
+      { keyword: "picnic", weight: 1.0 },
+      { keyword: "festival-goers", weight: 1.0 }
+    ];
+
+    const styleScores: Record<string, number> = {
+      Formal: 0,
+      Sensational: 0,
+      Fun: 0,
+      Normal: 0
+    };
+
+    const domainScores: Record<string, number> = {};
+    Object.keys(domainKeywords).forEach((key) => {
+      domainScores[key] = 0;
+    });
+
+    Object.entries(domainKeywords).forEach(([domainKey, keywords]) => {
+      keywords.forEach(({ keyword, weight }) => {
+        if (lower.includes(keyword)) {
+          domainScores[domainKey] += weight;
+        }
+      });
+    });
+
+    const bestDomain = Object.entries(domainScores).reduce(
+      (best, current) => (current[1] > best[1] ? current : best),
+      ["General", 0]
+    );
+
+    let inferredTopic =
+      bestDomain[1] >= 1.0 ? (bestDomain[0] as string) : "General";
+
+    sensationalPatterns.forEach(({ keyword, weight }) => {
+      if (lower.includes(keyword)) {
+        styleScores.Sensational += weight;
+      }
+    });
+    styleScores.Sensational += (lower.match(/!/g) || []).length * 0.4;
+    if (lower.includes("breaking news")) styleScores.Sensational += 1;
+
+    funPatterns.forEach(({ keyword, weight }) => {
+      if (lower.includes(keyword)) {
+        styleScores.Fun += weight;
+      }
+    });
+
+    const formalMarkers = [
+      { keyword: "according to", weight: 1.0 },
+      { keyword: "official", weight: 0.8 },
+      { keyword: "statement", weight: 0.7 },
+      { keyword: "report", weight: 0.8 },
+      { keyword: "conference", weight: 0.7 },
+      { keyword: "authorities", weight: 0.9 },
+      { keyword: "analysis", weight: 0.8 },
+      { keyword: "research", weight: 0.8 },
+      { keyword: "study", weight: 0.7 }
+    ];
+    formalMarkers.forEach(({ keyword, weight }) => {
+      if (lower.includes(keyword)) {
+        styleScores.Formal += weight;
+      }
+    });
+
+    if (["Politics", "Business", "Science"].includes(inferredTopic)) {
+      styleScores.Formal += 0.6;
+    }
+
+    const neutralMarkers = [
+      { keyword: "community", weight: 0.4 },
+      { keyword: "local", weight: 0.4 },
+      { keyword: "everyday", weight: 0.3 },
+      { keyword: "routine", weight: 0.3 },
+      { keyword: "update", weight: 0.3 }
+    ];
+    neutralMarkers.forEach(({ keyword, weight }) => {
+      if (lower.includes(keyword)) {
+        styleScores.Normal += weight;
+      }
+    });
+
+    const bestStyle = Object.entries(styleScores).reduce(
+      (best, current) => (current[1] > best[1] ? current : best),
+      ["Normal", 0]
+    );
+
+    let inferredTone =
+      bestStyle[1] >= 0.6 ? (bestStyle[0] as string) : "Normal";
+
+    return {
+      topic: inferredTopic,
+      tone: inferredTone
+    };
+  }, []);
+
+  useEffect(() => {
+    const combined = `${input} ${visionText}`.trim();
+    if (!combined) {
+      if (isTopicAuto && topic !== "General") {
+        setTopic("General");
+        localStorage.setItem("newsTopic", "General");
+      }
+      if (isToneAuto && tone !== "Normal") {
+        setTone("Normal");
+        localStorage.setItem("newsTone", "Normal");
+      }
+      return;
+    }
+
+    const inferred = inferAttributes(combined);
+
+    if (isTopicAuto && inferred.topic !== topic) {
+      setTopic(inferred.topic);
+      localStorage.setItem("newsTopic", inferred.topic);
+    }
+
+    if (isToneAuto && inferred.tone !== tone) {
+      setTone(inferred.tone);
+      localStorage.setItem("newsTone", inferred.tone);
+    }
+  }, [
+    input,
+    visionText,
+    inferAttributes,
+    isTopicAuto,
+    isToneAuto,
+    topic,
+    tone
+  ]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -46,12 +360,34 @@ const Generate = () => {
 
   const handleToneChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setTone(e.target.value);
+    setIsToneAuto(false);
     localStorage.setItem("newsTone", e.target.value);
+    localStorage.setItem("newsToneAuto", "false");
   };
 
   const handleTopicChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setTopic(e.target.value);
+    setIsTopicAuto(false);
     localStorage.setItem("newsTopic", e.target.value);
+    localStorage.setItem("newsTopicAuto", "false");
+  };
+
+  const resetToneToAuto = () => {
+    const combined = `${input} ${visionText}`.trim();
+    const inferred = inferAttributes(combined);
+    setTone(inferred.tone);
+    setIsToneAuto(true);
+    localStorage.setItem("newsTone", inferred.tone);
+    localStorage.setItem("newsToneAuto", "true");
+  };
+
+  const resetTopicToAuto = () => {
+    const combined = `${input} ${visionText}`.trim();
+    const inferred = inferAttributes(combined);
+    setTopic(inferred.topic);
+    setIsTopicAuto(true);
+    localStorage.setItem("newsTopic", inferred.topic);
+    localStorage.setItem("newsTopicAuto", "true");
   };
 
   const handleUpload = (file?: File | null) => {
@@ -121,11 +457,11 @@ const Generate = () => {
 
     try {
       const parts: string[] = [];
-      if (topic !== "General")
+      if (!isTopicAuto && topic !== "General")
         parts.push(`Write a ${topic} news article`);
       else parts.push("Write a general news article");
 
-      if (tone !== "Normal") parts.push(`in a ${tone} tone`);
+      if (!isToneAuto && tone !== "Normal") parts.push(`in a ${tone} tone`);
 
       const finalPrompt = `${parts.join(" ")} about: ${basePrompt}`;
 
@@ -194,6 +530,8 @@ const Generate = () => {
     setError(null);
     setTone("Normal");
     setTopic("General");
+    setIsToneAuto(true);
+    setIsTopicAuto(true);
     if (inputRef.current) inputRef.current.value = "";
     [
       "generatedNews",
@@ -201,8 +539,12 @@ const Generate = () => {
       "newsTone",
       "newsTopic",
       "visionText",
-      "sourceUrl"
+      "sourceUrl",
+      "newsToneAuto",
+      "newsTopicAuto"
     ].forEach((key) => localStorage.removeItem(key));
+    localStorage.setItem("newsToneAuto", "true");
+    localStorage.setItem("newsTopicAuto", "true");
   };
 
   const handleCopy = async () => {
@@ -251,7 +593,24 @@ const Generate = () => {
             />
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Choose Style:</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">
+                  Style{" "}
+                  <span className="text-xs text-muted-foreground">
+                    {isToneAuto ? "(auto-selected)" : "(manual override)"}
+                  </span>
+                </label>
+                {!isToneAuto && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetToneToAuto}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
               <select
                 value={tone}
                 onChange={handleToneChange}
@@ -265,7 +624,24 @@ const Generate = () => {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Choose Topic:</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">
+                  Topic{" "}
+                  <span className="text-xs text-muted-foreground">
+                    {isTopicAuto ? "(auto-selected)" : "(manual override)"}
+                  </span>
+                </label>
+                {!isTopicAuto && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetTopicToAuto}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
               <select
                 value={topic}
                 onChange={handleTopicChange}
@@ -275,6 +651,11 @@ const Generate = () => {
                 <option value="Business">Business — Markets and economics.</option>
                 <option value="Sports">Sports — Games and events.</option>
                 <option value="Technology">Technology — Innovations and trends.</option>
+                <option value="Health">Health — Medical and wellness topics.</option>
+                <option value="Environment">Environment — Climate and ecology.</option>
+                <option value="Science">Science — Research and discovery.</option>
+                <option value="Crime">Crime — Security and legal incidents.</option>
+                <option value="Entertainment">Entertainment — Culture and events.</option>
                 <option value="General">General — No specific topic.</option>
               </select>
             </div>
