@@ -16,14 +16,17 @@ type DoughnutChartProps = {
 // Constants
 const CATEGORIES = {
   style: ["Fun", "Formal", "Sensational", "Normal"],
-  domain: ["Technology", "Politics", "Business", "Sports"],
+  domain: ["Technology","Politics","Business","Sports","Health","Environment","Science","Crime","Entertainment","General",],
 };
 
 const COLORS: Record<string, string[] | Record<string, string>> = {
   detection: ["#86EFAC", "#FCD34D", "#FCA5A5"],
   overall: ["#3B82F6", "#8B5CF6"],
-  style: { Fun: "#60A5FA", Formal: "#F87171", Sensational: "#FBBF24", Normal: "#A78BFA" },
-  domain: { Technology: "#10B981", Politics: "#F59E0B", Business: "#EF4444", Sports: "#8B5CF6" },
+  style: {Fun: "#60A5FA",Formal: "#F87171",Sensational: "#FBBF24",Normal: "#A78BFA",
+  },
+  domain: {Technology: "#10B981",Politics: "#F59E0B",Business: "#EF4444",Sports: "#8B5CF6",Health: "#FACC15",
+    Environment: "#22C55E",Science: "#3B82F6",Crime: "#6366F1",Entertainment: "#EC4899",General: "#9CA3AF",
+  },
 };
 
 const chartsCache = new Map<string, { chart: Chart; canvasId: string }>();
@@ -68,7 +71,8 @@ const DoughnutChart = ({
   detectionStats = { real: 5, fake: 3, misleading: 2 },
   generationStats = {
     byStyle: { Fun: 5, Formal: 3, Sensational: 2, Normal: 4 },
-    byDomain: { Technology: 6, Politics: 4, Business: 2, Sports: 2 },
+    byDomain: {Technology: 6,Politics: 4,Business: 2,Sports: 2,Health: 0,Environment: 0,Science: 0,Crime: 0,Entertainment: 0,General: 0,
+    },
   },
   overallStats = { detections: 10, generations: 15 },
   variant = "style",

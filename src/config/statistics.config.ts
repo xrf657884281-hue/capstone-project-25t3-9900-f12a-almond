@@ -22,6 +22,12 @@ export const DOMAIN_FILTERS = [
   { key: "Politics", label: "Politics", color: "amber" as const },
   { key: "Business", label: "Business", color: "red" as const },
   { key: "Sports", label: "Sports", color: "purple" as const },
+  { key: "Health", label: "Health", color: "yellow" as const },
+  { key: "Environment", label: "Environment", color: "pink" as const },
+  { key: "Science", label: "Science", color: "blue" as const },
+  { key: "Crime", label: "Crime", color: "indigo" as const },
+  { key: "Entertainment", label: "Entertainment", color: "cyan" as const },
+  { key: "General", label: "General", color: "gray" as const },
 ] as const;
 
 // Tab configuration
