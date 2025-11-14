@@ -20,7 +20,7 @@ const CATEGORIES = {
 };
 
 const COLORS: Record<string, string[] | Record<string, string>> = {
-  detection: ["#86EFAC", "#FCD34D", "#FCA5A5"],
+  detection: ["#86EFAC", "#FCA5A5", "#FCD34D"],
   overall: ["#3B82F6", "#8B5CF6"],
   style: {Fun: "#60A5FA",Formal: "#F87171",Sensational: "#FBBF24",Normal: "#A78BFA",
   },
