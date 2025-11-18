@@ -1794,13 +1794,13 @@ async def generate_detection_pdf_on_demand(
     current_user: Dict[str, Any] = Depends(require_active_user)
 ):
     """
-    按需生成检测结果的PDF
+  
     
     Args:
-        record_id: 检测记录ID
+        record_id: 
     
     Returns:
-        生成结果
+      
     """
     if not mongo_service.is_connected():
         raise HTTPException(status_code=503, detail="Database not connected")

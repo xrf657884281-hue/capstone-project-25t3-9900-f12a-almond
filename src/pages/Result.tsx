@@ -38,86 +38,118 @@ const Progress = ({ value }: { value?: number }) => {
 const Result = () => {
   const navigate = useNavigate();
   const { state } = useLocation() as {
-    state?: { source?: string; text?: string; analysis?: Analysis; record_id?: string };
+    state?: { source?: string; text?: string; analysis?: Analysis; record_id?: string; };
   };
 
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
-
+  // Try to restore data from localStorage if state is empty
   const getInitialData = () => {
     if (state?.text && state?.analysis) {
-      localStorage.setItem("lastDetectionResult", JSON.stringify({
+      // Save to localStorage for future refreshes
+      localStorage.setItem('lastDetectionResult', JSON.stringify({
         text: state.text,
         analysis: state.analysis,
-        record_id: state.record_id,
+        record_id: state.record_id
       }));
-      return { text: state.text, analysis: state.analysis, record_id: state.record_id };
+      return { text: state.text, analysis: state.analysis };
     }
+    
+    // Restore from localStorage if available
     try {
-      const cached = localStorage.getItem("lastDetectionResult");
+      const cached = localStorage.getItem('lastDetectionResult');
       if (cached) {
         const parsed = JSON.parse(cached);
-        return {
-          text: parsed.text || "",
-          analysis: parsed.analysis || {},
-          record_id: parsed.record_id as string | undefined,
-        };
+        console.log('📦 Restored data from localStorage');
+        return { text: parsed.text || "", analysis: parsed.analysis || {} };
       }
     } catch (e) {
-      console.error("Failed to restore from localStorage:", e);
+      console.error('Failed to restore from localStorage:', e);
     }
-    return { text: "", analysis: {}, record_id: undefined };
+    
+    return { text: "", analysis: {} };
   };
 
   const initialData = getInitialData();
   const text = initialData.text;
-  const analysis = initialData.analysis as Analysis;
-  const restoredRecordId = initialData.record_id;
+  const analysis = initialData.analysis;
 
   const [relatedNews, setRelatedNews] = useState<any[]>([]);
   const [loadingNews, setLoadingNews] = useState(false);
-  const [newsWarning, setNewsWarning] = useState<string>("");
+  const [newsWarning, setNewsWarning] = useState<string>('');
 
   useEffect(() => {
     const fetchRelatedNews = async () => {
-      if (!text) return;
+      if (!text) {
+        console.log('⚠️ No text provided, skipping news fetch');
+        return;
+      }
+      
+      console.log('🔍 Starting to fetch related news...');
       setLoadingNews(true);
+      
       try {
-        const res = await fetch(`${baseUrl}/api/news/find_related`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": token ? `Bearer ${token}` : "",
-          },
-          body: JSON.stringify({
-            text,
-            detection_result: (analysis as any)?.details || null,
-            max_results: 4,
-            language: "en",
-          }),
-          signal: AbortSignal.timeout(30000),
-        });
-        const data = await res.json();
+        console.log('📡 Sending request to backend...');
+        console.log('📄 Text to analyze (first 200 chars):', text.substring(0, 200));
+        console.log('📏 Total text length:', text.length);
+        
+        const response = await fetch(
+          `http://localhost:8000/api/news/find_related`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              text: text,
+              detection_result: analysis.details || null,
+              max_results: 4,
+              language: 'en'
+            }),
+            signal: AbortSignal.timeout(30000) // 30 second timeout
+          }
+        );
+        
+        console.log('📥 Response received, parsing...');
+        const data = await response.json();
+        console.log('📦 Data parsed:', data);
+        
         if (data.success && data.result) {
-          setRelatedNews(data.result.articles || []);
-          setNewsWarning(data.result.warning || "");
+          const articles = data.result.articles || [];
+          const warning = data.result.warning || '';
+          
+          console.log('✅ Setting related news:', articles.length, 'articles');
+          setRelatedNews(articles);
+          setNewsWarning(warning);
+          
+          console.log('📰 Smart news search used query:', data.result.search_query);
+          console.log('📝 Entities extracted:', data.result.entities_used);
+          console.log('🔑 Keywords extracted:', data.result.keywords_used);
+          
+          if (warning) {
+            console.warn('⚠️ Warning:', warning);
+          }
         } else {
+          console.warn('⚠️ No articles in response or request failed');
           setRelatedNews([]);
-          setNewsWarning("");
+          setNewsWarning('');
         }
-      } catch (err) {
-        console.error("❌ Failed to fetch related news:", err);
+      } catch (error) {
+        console.error('❌ Failed to fetch related news:', error);
         setRelatedNews([]);
       } finally {
+        console.log('✅ News fetch completed, setting loading to false');
         setLoadingNews(false);
       }
     };
-    fetchRelatedNews();
-  }, [text, baseUrl, token, analysis]);
 
+    fetchRelatedNews();
+  }, [text]); // Only depend on text to avoid re-fetching when analysis updates
+
+  // FAKE / TRUE
   const verdict: "FAKE" | "TRUE" | "" =
     typeof analysis.isFake === "boolean"
-      ? analysis.isFake ? "FAKE" : "TRUE"
+      ? analysis.isFake
+        ? "FAKE"
+        : "TRUE"
       : typeof analysis.verdict === "string"
       ? (analysis.verdict.toUpperCase() as "FAKE" | "TRUE")
       : "";
@@ -132,26 +164,21 @@ const Result = () => {
     }
   };
 
-  const handleBack = () => navigate("/profile");
-
-  const getRecordId = () => state?.record_id || restoredRecordId;
-
+  const handleBack = () => {
+    navigate("/profile");
+  };
   const handleGeneratePDF = async () => {
-    const recordId = getRecordId();
-    if (!recordId) {
+    if (!state?.record_id) {
       alert("⚠️ No record ID found for PDF generation.");
       return;
     }
     try {
-      const res = await fetch(`${baseUrl}/api/detection/history/${recordId}/generate_pdf`, {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      const res = await fetch(`${baseUrl}/api/detection/history/${state.record_id}/generate_pdf`, {
         method: "POST",
-        headers: {
-          "Authorization": token ? `Bearer ${token}` : "",
-          "Content-Type": "application/json",
-        },
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) throw new Error(data?.detail || "PDF generation failed");
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.detail || "PDF generation failed");
       alert("✅ PDF generated successfully!");
     } catch (err) {
       console.error(err);
@@ -160,23 +187,19 @@ const Result = () => {
   };
 
   const handleExportPDF = async () => {
-    const recordId = getRecordId();
-    if (!recordId) {
+    if (!state?.record_id) {
       alert("⚠️ No record ID found for PDF export.");
       return;
     }
     try {
-      const res = await fetch(`${baseUrl}/api/detection/history/${recordId}/pdf`, {
-        headers: {
-          "Authorization": token ? `Bearer ${token}` : "",
-        },
-      });
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      const res = await fetch(`${baseUrl}/api/detection/history/${state.record_id}/pdf`);
       if (!res.ok) throw new Error("Failed to fetch PDF");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `detection_${recordId}.pdf`;
+      a.download = `detection_${state.record_id}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -188,8 +211,7 @@ const Result = () => {
   };
 
   const handleDelete = async () => {
-    const recordId = getRecordId();
-    if (!recordId) {
+    if (!state?.record_id) {
       alert("No record ID found.");
       return;
     }
@@ -197,11 +219,9 @@ const Result = () => {
     if (!confirmDelete) return;
 
     try {
-      const res = await fetch(`${baseUrl}/api/detection/history/${recordId}`, {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      const res = await fetch(`${baseUrl}/api/detection/history/${state.record_id}`, {
         method: "DELETE",
-        headers: {
-          "Authorization": token ? `Bearer ${token}` : "",
-        },
       });
       if (!res.ok) throw new Error("Failed to delete record");
       alert("✅ Record deleted successfully!");
@@ -222,10 +242,18 @@ const Result = () => {
             <CardContent className="p-4">
               <div className="flex justify-between mb-3">
                 <div className="flex gap-2">
-                  <Button variant="secondary" onClick={handleGeneratePDF} className="border border-gray-300 dark:border-border shadow">
+                  <Button
+                    variant="secondary"
+                    onClick={handleGeneratePDF}
+                    className="border border-gray-300 dark:border-border shadow"
+                  >
                     🧾 Generate PDF
                   </Button>
-                  <Button variant="secondary" onClick={handleExportPDF} className="border border-gray-300 dark:border-border shadow">
+                  <Button
+                    variant="secondary"
+                    onClick={handleExportPDF}
+                    className="border border-gray-300 dark:border-border shadow"
+                  >
                     📤 Export PDF
                   </Button>
                   <Button
@@ -237,17 +265,27 @@ const Result = () => {
                   </Button>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={handleCopy} className="border border-gray-300 dark:border-border shadow">
+                  <Button
+                    variant="outline"
+                    onClick={handleCopy}
+                    className="border border-gray-300 dark:border-border shadow"
+                  >
                     Copy
                   </Button>
-                  <Button variant="outline" onClick={handleBack} className="border border-gray-300 dark:border-border shadow">
+                  <Button
+                    variant="outline"
+                    onClick={handleBack}
+                    className="border border-gray-300 dark:border-border shadow"
+                  >
                     Back to Profile
                   </Button>
                 </div>
               </div>
 
-              {analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning &&
-                analysis.details.baseline_results.text_detection.detectgpt.reasoning.length > 0 && (
+              {analysis.details?.baseline_results?.text_detection?.detectgpt
+                  ?.reasoning &&
+                analysis.details.baseline_results.text_detection.detectgpt.reasoning
+                  .length > 0 && (
                   <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
                     <p className="text-xs text-yellow-800">
                       Detected issues are highlighted below. Hover to view detailed information.
@@ -260,24 +298,30 @@ const Result = () => {
                   <div className="text-sm">
                     <HighlightedText
                       text={text}
-                      errors={analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning || []}
+                      errors={
+                        analysis.details?.baseline_results?.text_detection
+                          ?.detectgpt?.reasoning || []
+                      }
                       className="text-sm"
                     />
                   </div>
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  No content provided. Please go back and run a scan or generate something first.
+                  No content provided. Please go back and run a scan or generate
+                  something first.
                 </div>
               )}
             </CardContent>
           </Card>
 
-          <h1 className="font-bold text-3lg">Related News</h1>
+          <h1 className='font-bold text-3lg'>Related News</h1>
 
           {newsWarning && (
             <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded-md">
-              <p className="text-sm text-yellow-800">⚠️ {newsWarning}</p>
+              <p className="text-sm text-yellow-800">
+                ⚠️ {newsWarning}
+              </p>
             </div>
           )}
 
@@ -291,7 +335,7 @@ const Result = () => {
                 <Card
                   key={idx}
                   className="border border-gray-300 dark:border-border shadow cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200"
-                  onClick={() => window.open(article.url, "_blank")}
+                  onClick={() => window.open(article.url, '_blank')}
                 >
                   <CardContent className="p-4">
                     {article.urlToImage && (
@@ -299,19 +343,17 @@ const Result = () => {
                         src={article.urlToImage}
                         alt={article.title}
                         className="w-full h-24 object-cover rounded mb-2"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                       />
                     )}
                     <h3 className="text-sm font-semibold mb-2 line-clamp-2">
-                      {article.title || "No title"}
+                      {article.title || 'No title'}
                     </h3>
                     <p className="text-xs text-muted-foreground line-clamp-3 mb-2">
-                      {article.description || "No description available"}
+                      {article.description || 'No description available'}
                     </p>
                     <div className="text-xs text-blue-600 font-medium">
-                      {article.source?.name || "Unknown source"}
+                      {article.source?.name || 'Unknown source'}
                     </div>
                   </CardContent>
                 </Card>
@@ -323,7 +365,7 @@ const Result = () => {
             )}
           </div>
         </div>
-
+      
         <div className="lg:col-span-5 space-y-4">
           <h2 className="text-lg font-semibold">Basic Scan</h2>
           <Card className="border border-gray-300 dark:border-border shadow">
@@ -369,12 +411,12 @@ const Result = () => {
               <Progress value={analysis.readability} />
             </CardContent>
           </Card>
-
           <Card className="border border-gray-300 dark:border-border shadow">
             <CardContent className="p-4 space-y-4">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-sm">🤖 Analysis</h3>
-                {analysis.details?.baseline_results?.text_detection?.detectgpt?.verdict && (
+                {analysis.details?.baseline_results?.text_detection?.detectgpt
+                  ?.verdict && (
                   <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300">
                     {analysis.details.baseline_results.text_detection.detectgpt.verdict.toUpperCase()}
                   </span>
@@ -383,15 +425,29 @@ const Result = () => {
 
               {(() => {
                 const reasoning = analysis.details?.baseline_results?.text_detection?.detectgpt?.reasoning;
+                
+                console.log('🔍 DEBUG Analysis:', {
+                  hasDetails: !!analysis.details,
+                  hasBaseline: !!analysis.details?.baseline_results,
+                  hasTextDetection: !!analysis.details?.baseline_results?.text_detection,
+                  hasDetectGPT: !!analysis.details?.baseline_results?.text_detection?.detectgpt,
+                  hasReasoning: !!reasoning,
+                  reasoningLength: reasoning?.length,
+                  reasoningData: reasoning
+                });
+                
                 if (!reasoning || reasoning.length === 0) {
+                  console.log('❌ No reasoning data available');
+                  console.log('Analysis object:', analysis);
+                  console.log('Details:', analysis.details);
                   return (
                     <div className="text-sm p-3 bg-yellow-50 border border-yellow-300 rounded">
                       <p className="font-bold text-yellow-800 mb-2">⚠️ 调试信息：</p>
                       <p className="text-xs text-yellow-700">
-                        - 有 details: {analysis.details ? "✓" : "✗"}<br />
-                        - 有 baseline_results: {analysis.details?.baseline_results ? "✓" : "✗"}<br />
-                        - 有 detectgpt: {analysis.details?.baseline_results?.text_detection?.detectgpt ? "✓" : "✗"}<br />
-                        - 有 reasoning: {reasoning ? "✓" : "✗"}<br />
+                        - 有 details: {analysis.details ? '✓' : '✗'}<br/>
+                        - 有 baseline_results: {analysis.details?.baseline_results ? '✓' : '✗'}<br/>
+                        - 有 detectgpt: {analysis.details?.baseline_results?.text_detection?.detectgpt ? '✓' : '✗'}<br/>
+                        - 有 reasoning: {reasoning ? '✓' : '✗'}<br/>
                         - Reasoning 长度: {reasoning?.length || 0}
                       </p>
                       <p className="text-xs text-yellow-700 mt-2">
@@ -400,52 +456,82 @@ const Result = () => {
                     </div>
                   );
                 }
-
+                
+                console.log('✅ Rendering', reasoning.length, 'reasoning items');
+                
                 return (
-                  <div className="space-y-2">
-                    {reasoning.map((reason: string, i: number) => {
+                <div className="space-y-2">
+                  {reasoning.map(
+                    (reason: string, i: number) => {
                       const titleMatch = reason.match(/\*\*(.*?)\*\*/);
                       if (titleMatch) {
                         const title = titleMatch[1];
-                        let content = reason.replace(/\*\*(.*?)\*\*/, "").trim();
-                        content = content.replace(/^[\s:\-]+/, "");
+                        let content = reason
+                          .replace(/\*\*(.*?)\*\*/, "")
+                          .trim();
+                        content = content.replace(/^:\s*/, "");
                         return (
-                          <div key={i} className="text-sm bg-blue-50 rounded-md border border-blue-300 p-3">
+                          <div
+                            key={i}
+                            className="text-sm bg-blue-50 rounded-md border border-blue-300 p-3"
+                          >
                             <p className="text-gray-700">
-                              <span className="font-bold text-gray-800">{title}:</span> {content}
+                              <span className="font-bold text-gray-800">
+                                {title}:
+                              </span>{" "}
+                              {content}
                             </p>
                           </div>
                         );
                       }
                       return (
-                        <div key={i} className="text-sm bg-blue-50 rounded-md border border-blue-300 p-3">
+                        <div
+                          key={i}
+                          className="text-sm bg-blue-50 rounded-md border border-blue-300 p-3"
+                        >
                           <p className="text-gray-700">{reason}</p>
                         </div>
                       );
-                    })}
-                  </div>
+                    }
+                  )}
+                </div>
                 );
               })()}
 
-              {Array.isArray(analysis.mostAISentences) && analysis.mostAISentences.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide">Key Factors</h4>
-                  {analysis.mostAISentences.map((s: string, i: number) => (
-                    <div key={i} className="text-sm bg-gray-50 rounded-md border border-gray-300 p-2">
-                      <strong>{s}</strong>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {Array.isArray(analysis.mostAISentences) &&
+                analysis.mostAISentences.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                      Key Factors
+                    </h4>
+                    {analysis.mostAISentences.map((s: string, i: number) => (
+                      <div
+                        key={i}
+                        className="text-sm bg-gray-50 rounded-md border border-gray-300 p-2"
+                      >
+                        <strong>{s}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
               {analysis.details?.baseline_results?.text_detection?.detectgpt && (
                 <div className="pt-3 border-t border-gray-300">
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <span>
-                      Model: {analysis.details.baseline_results.text_detection.detectgpt.model}
+                      Model:{" "}
+                      {
+                        analysis.details.baseline_results.text_detection
+                          .detectgpt.model
+                      }
                     </span>
                     <span>
-                      Confidence: {(analysis.details.baseline_results.text_detection.detectgpt.confidence * 100).toFixed(0)}%
+                      Confidence:{" "}
+                      {(
+                        analysis.details.baseline_results.text_detection.detectgpt
+                          .confidence * 100
+                      ).toFixed(0)}
+                      %
                     </span>
                   </div>
                 </div>
@@ -453,7 +539,9 @@ const Result = () => {
             </CardContent>
           </Card>
 
-          {(analysis.details?.tavily_verification || analysis.details?.wikipedia_verification) && (
+          {/* Fact Verification */}
+          {(analysis.details?.tavily_verification ||
+            analysis.details?.wikipedia_verification) && (
             <Card className="border border-gray-300 dark:border-border shadow">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-3">
@@ -464,8 +552,13 @@ const Result = () => {
                 </div>
                 <div className="space-y-2">
                   {(() => {
-                    const verification = analysis.details?.tavily_verification || analysis.details?.wikipedia_verification;
-                    const coverage = verification?.tavily_coverage || verification?.wikipedia_coverage || 0;
+                    const verification =
+                      analysis.details?.tavily_verification ||
+                      analysis.details?.wikipedia_verification;
+                    const coverage =
+                      verification?.tavily_coverage ||
+                      verification?.wikipedia_coverage ||
+                      0;
                     const score = verification?.overall_score || 0;
                     const entitiesFound = verification?.entities_found || 0;
                     const entitiesChecked = verification?.entities_checked || 1;
@@ -473,7 +566,9 @@ const Result = () => {
                     return (
                       <>
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600">Verification Score</span>
+                          <span className="text-gray-600">
+                            Verification Score
+                          </span>
                           <span
                             className={`font-semibold ${
                               score * 100 < 30
@@ -490,8 +585,12 @@ const Result = () => {
 
                         <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
                           <div className="bg-gray-50 rounded p-2 border border-gray-300">
-                            <div className="text-gray-500 mb-1 font-bold">Coverage</div>
-                            <div className="font-semibold text-lg mb-1">{(coverage * 100).toFixed(0)}%</div>
+                            <div className="text-gray-500 mb-1 font-bold">
+                              Coverage
+                            </div>
+                            <div className="font-semibold text-lg mb-1">
+                              {(coverage * 100).toFixed(0)}%
+                            </div>
                             <div className="text-gray-400 text-[10px]">
                               {coverage >= 0.8
                                 ? "✅ High coverage"
@@ -501,31 +600,54 @@ const Result = () => {
                             </div>
                           </div>
                           <div className="bg-gray-50 rounded p-2 border border-gray-300">
-                            <div className="text-gray-500 mb-1 font-bold">Entities Found</div>
-                            <div className="font-semibold text-lg mb-1">{entitiesFound}/{entitiesChecked}</div>
-                            <div className="text-gray-400 text-[10px]">
-                              {entitiesChecked > 0 ? `${((entitiesFound / entitiesChecked) * 100).toFixed(0)}% verified` : "No entities checked"}
+                            <div className="text-gray-500 mb-1 font-bold">
+                              Entities Found
                             </div>
-                            {verification?.entity_results?.length > 0 && (
-                              <div className="mt-2 pt-2 border-t border-gray-200">
-                                <div className="text-[10px] text-gray-500 mb-1">Found entities:</div>
-                                <div className="space-y-1">
-                                  {verification.entity_results.slice(0, 3).map((entity: any, idx: number) => (
-                                    <div key={idx} className="flex items-center gap-1 text-[10px]">
-                                      <span className={entity.exists ? "text-green-600" : "text-red-600"}>
-                                        {entity.exists ? "✓" : "✗"}
-                                      </span>
-                                      <span className="text-gray-700 truncate">{entity.entity}</span>
+                            <div className="font-semibold text-lg mb-1">
+                              {entitiesFound}/{entitiesChecked}
+                            </div>
+                            <div className="text-gray-400 text-[10px]">
+                              {entitiesChecked > 0
+                                ? `${(
+                                    (entitiesFound / entitiesChecked) *
+                                    100
+                                  ).toFixed(0)}% verified`
+                                : "No entities checked"}
+                            </div>
+                            {(() => {
+                              console.log('🔍 DEBUG: verification object:', verification);
+                              console.log('🔍 DEBUG: entity_results exists?', verification?.entity_results);
+                              console.log('🔍 DEBUG: entity_results length:', verification?.entity_results?.length);
+                              
+                              if (verification?.entity_results && verification.entity_results.length > 0) {
+                                console.log('✅ Rendering entity results:', verification.entity_results);
+                                return (
+                                  <div className="mt-2 pt-2 border-t border-gray-200">
+                                    <div className="text-[10px] text-gray-500 mb-1">Found entities:</div>
+                                    <div className="space-y-1">
+                                      {verification.entity_results.slice(0, 3).map((entity: any, idx: number) => (
+                                        <div key={idx} className="flex items-center gap-1 text-[10px]">
+                                          <span className={entity.exists ? "text-green-600" : "text-red-600"}>
+                                            {entity.exists ? "✓" : "✗"}
+                                          </span>
+                                          <span className="text-gray-700 truncate">
+                                            {entity.entity}
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {verification.entity_results.length > 3 && (
+                                        <div className="text-[10px] text-gray-400 italic">
+                                          +{verification.entity_results.length - 3} more
+                                        </div>
+                                      )}
                                     </div>
-                                  ))}
-                                  {verification.entity_results.length > 3 && (
-                                    <div className="text-[10px] text-gray-400 italic">
-                                      +{verification.entity_results.length - 3} more
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
+                                  </div>
+                                );
+                              } else {
+                                console.log('❌ Entity results not found or empty');
+                                return null;
+                              }
+                            })()}
                           </div>
                         </div>
                       </>
