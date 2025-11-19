@@ -576,7 +576,7 @@ const Generate = () => {
         <h1 className="text-4xl font-bold mb-6 leading-snug">
           AI Fake News Generator
           <span className="text-lg font-normal ml-2 text-blue-600 dark:text-blue-400">
-            Powered by Chat-GPT-4o
+            Powered by LLM
           </span>
         </h1>
         <p className="text-lg text-muted-foreground mb-4">
