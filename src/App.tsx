@@ -18,6 +18,7 @@ import SignIn from "./pages/Sign-in";
 import SignUp from "./pages/Sign-up";
 import Profile from "./pages/Profile";
 import Result from "./pages/Result";
+import { Toaster } from "./components/ui/sonner";
 
 const App = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -139,6 +140,8 @@ const App = () => {
           <Route key={route.path} path={route.path} element={route.element} />
         ))}
       </Routes>
+
+      <Toaster/>
     </main>
   );
 };
