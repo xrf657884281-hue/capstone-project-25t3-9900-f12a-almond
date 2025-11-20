@@ -23,6 +23,28 @@ const clamp01 = (v: number | undefined) => {
   return Math.max(0, Math.min(100, v));
 };
 
+// Get confidence category based on confidence and fake probability
+const getConfidenceCategory = (confidence?: number, fakeProbability?: number): string => {
+  const conf = typeof confidence === "number" ? confidence / 100 : 0;
+  const fakeProb = typeof fakeProbability === "number" ? fakeProbability / 100 : 0.5;
+  
+  if (conf < 0.3) {
+    return "Completely Uncertain";
+  }
+  
+  if (fakeProb < 0.2 && conf > 0.7) {
+    return "Very Certain: Real";
+  } else if (fakeProb < 0.4 && conf > 0.4) {
+    return "Relatively Certain: Real";
+  } else if (fakeProb > 0.8 && conf > 0.7) {
+    return "Very Certain: Fake";
+  } else if (fakeProb > 0.6 && conf > 0.4) {
+    return "Relatively Certain: Fake";
+  } else {
+    return "Completely Uncertain";
+  }
+};
+
 const Progress = ({ value }: { value?: number }) => {
   const v = clamp01(value);
   return (
@@ -144,14 +166,14 @@ const Result = () => {
     fetchRelatedNews();
   }, [text]); // Only depend on text to avoid re-fetching when analysis updates
 
-  // FAKE / TRUE
-  const verdict: "FAKE" | "TRUE" | "" =
+  // FAKE / REAL
+  const verdict: "FAKE" | "REAL" | "" =
     typeof analysis.isFake === "boolean"
       ? analysis.isFake
         ? "FAKE"
-        : "TRUE"
+        : "REAL"
       : typeof analysis.verdict === "string"
-      ? (analysis.verdict.toUpperCase() as "FAKE" | "TRUE")
+      ? (analysis.verdict.toUpperCase() as "FAKE" | "REAL")
       : "";
 
   const handleCopy = async () => {
@@ -172,10 +194,18 @@ const Result = () => {
       alert("⚠️ No record ID found for PDF generation.");
       return;
     }
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      alert("❌ You must be logged in to generate PDFs.");
+      return;
+    }
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
       const res = await fetch(`${baseUrl}/api/detection/history/${state.record_id}/generate_pdf`, {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.detail || "PDF generation failed");
@@ -191,9 +221,18 @@ const Result = () => {
       alert("⚠️ No record ID found for PDF export.");
       return;
     }
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      alert("❌ You must be logged in to download PDFs.");
+      return;
+    }
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-      const res = await fetch(`${baseUrl}/api/detection/history/${state.record_id}/pdf`);
+      const res = await fetch(`${baseUrl}/api/detection/history/${state.record_id}/pdf`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       if (!res.ok) throw new Error("Failed to fetch PDF");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -220,8 +259,16 @@ const Result = () => {
 
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+      const token = localStorage.getItem("access_token");
+      if (!token) {
+        alert("❌ You must be logged in to delete records.");
+        return;
+      }
       const res = await fetch(`${baseUrl}/api/detection/history/${state.record_id}`, {
         method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       if (!res.ok) throw new Error("Failed to delete record");
       alert("✅ Record deleted successfully!");
@@ -388,16 +435,16 @@ const Result = () => {
                 )}
               </div>
 
-              {/* Confidence */}
+              {/* Confidence Category */}
               <div className="flex items-center justify-between pt-2">
                 <span className="text-sm font-medium">Confidence</span>
-                <span className="text-sm">
-                  {typeof analysis.humanConfidence === "number"
-                    ? `${clamp01(analysis.humanConfidence)}%`
-                    : "--"}
+                <span className="text-sm font-semibold">
+                  {getConfidenceCategory(analysis.humanConfidence, analysis.readability)}
                 </span>
               </div>
-              <Progress value={analysis.humanConfidence} />
+              <div className="pt-1">
+                <Progress value={analysis.humanConfidence} />
+              </div>
 
               {/* Fake Probability */}
               <div className="flex items-center justify-between pt-2">

@@ -703,7 +703,14 @@ class ImprovedDetection:
                                f"Claims: {claims_verified}/{total_claims}, Entities: {entities_found}/{total_entities}")
                     
                                                                                    
-                    fast_fake_prob = max(0.0, 0.15 - (tavily_score - 0.75) * 0.3)                             
+                    fast_fake_prob = max(0.0, 0.15 - (tavily_score - 0.75) * 0.3)
+                    # Recompute confidence based on final fake probability (same formula as normal path)
+                    distance_from_center = abs(fast_fake_prob - 0.5)
+                    fast_confidence = (distance_from_center * 2) ** 1.5
+                    # High verification score boosts confidence
+                    if tavily_score > 0.75:
+                        fast_confidence = min(1.0, fast_confidence + 0.15)
+                    fast_confidence = max(0.0, min(1.0, fast_confidence))
                     
                     fast_result = {
                         'baseline_results': baseline_results,
@@ -711,7 +718,7 @@ class ImprovedDetection:
                         'consistency_check': {},
                         'fusion_result': {
                             'fake_probability': fast_fake_prob,
-                            'confidence': 0.90,
+                            'confidence': fast_confidence,
                             'method': 'tavily_fast_path'
                         },
                         'fact_verification': baseline_results.get('fact_verification', {}),
@@ -721,7 +728,7 @@ class ImprovedDetection:
                         'final_prediction': {
                             'prediction': 'real',
                             'fake_probability': fast_fake_prob,
-                            'confidence': 0.90,
+                            'confidence': fast_confidence,
                             'explanation': {
                                 'base_fusion_score': fast_fake_prob,
                                 'consistency_adjustment': 0.0,
@@ -731,7 +738,7 @@ class ImprovedDetection:
                                 'wikipedia_boost': -(0.35 + (tavily_score - 0.75) * 0.4),                                   
                                 'tavily_boost': -(0.35 + (tavily_score - 0.75) * 0.4),
                                 'final_score': fast_fake_prob,
-                                'confidence': 0.90,
+                                'confidence': fast_confidence,
                                 'key_factors': [f'high_{self.verifier_type}_verification', f'{self.verifier_type}_fast_path'],
                                 'fast_path_reason': f'Tavily verification very high (score: {tavily_score:.2%}, coverage: {tavily_coverage:.2%}, claims: {claims_verified}/{total_claims}, entities: {entities_found}/{total_entities})',
                                 'wikipedia_details': {                                   
@@ -1399,7 +1406,13 @@ class ImprovedDetection:
                                                        
         final_fake_prob = min(1.0, max(0.0, base_fake_prob + consistency_adjustment + rhetorical_adjustment + tavily_adjustment + contradiction_penalty + tavily_boost))
         # Recompute confidence after adjustments
-        final_confidence = abs(final_fake_prob - 0.5) * 2
+        # Use squared function for more aggressive confidence scaling
+        distance_from_center = abs(final_fake_prob - 0.5)
+        final_confidence = (distance_from_center * 2) ** 1.5  # Power of 1.5 for better scaling
+        # Consider adjustment magnitude to boost confidence when significant changes were made
+        total_adjustment = abs(consistency_adjustment) + abs(rhetorical_adjustment) + abs(tavily_adjustment) + abs(contradiction_penalty) + abs(tavily_boost)
+        if total_adjustment > 0.1:  # Significant adjustments were made
+            final_confidence = min(1.0, final_confidence + 0.1)  # Boost confidence by 0.1
         final_confidence = max(0.0, min(1.0, final_confidence))
         
                               
@@ -1453,10 +1466,19 @@ class ImprovedDetection:
                 'claims_checked': tavily_verification.get('verification_summary', {}).get('total_claims_checked', 0)
             }
         
+        misleading_lower = 0.4
+        misleading_upper = 0.6
+        if final_fake_prob >= misleading_upper:
+            prediction_label = 'fake'
+        elif final_fake_prob <= misleading_lower:
+            prediction_label = 'real'
+        else:
+            prediction_label = 'misleading'
+        
         return {
-            'prediction': 'fake' if final_fake_prob > threshold else 'real',                        
+            'prediction': prediction_label,
             'fake_probability': final_fake_prob,
             'confidence': final_confidence,
             'explanation': explanation,
-            'threshold_used': threshold                                 
+            'threshold_used': threshold
         }

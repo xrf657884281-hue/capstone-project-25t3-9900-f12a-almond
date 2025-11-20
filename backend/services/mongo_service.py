@@ -14,7 +14,7 @@ class MongoService:
 
     def __init__(self, url: Optional[str] = None, database: Optional[str] = None):
         base_url = url or Config.MONGODB_URL
-        # 若未显式指定 authSource，则默认使用 admin（与 docker-compose 中 root 用户一致）
+        
         if 'authSource=' not in base_url:
             if '?' in base_url:
                 base_url = base_url + '&authSource=admin'

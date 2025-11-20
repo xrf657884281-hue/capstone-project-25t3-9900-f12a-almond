@@ -86,17 +86,42 @@ const Detection = () => {
     }
     try {
       setError(null);
-      const res = await fetch(url);
-      const html = await res.text();
-      const stripped = html.replace(/<[^>]*>?/gm, "").slice(0, MAX_LEN);
-      onTextChange(stripped);
-    } catch {
-      setError("Failed to fetch content from URL.");
+      setIsLoading(true);
+
+      const apiUrl = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/url/fetch`;
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: url.trim() }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Backend returned ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.fetched_content) {
+        onTextChange(result.fetched_content);
+        setError(null);
+      } else {
+        onTextChange(url.trim());
+        setError("Backend could not extract content from URL. URL has been copied to text field.");
+      }
+    } catch (err) {
+      console.error("Failed to fetch URL content:", err);
+      setError("Failed to fetch content from URL. You can still paste the URL directly and click Detect.");
+      onTextChange(url.trim());
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleScan = async () => {
-    const contentToDetect = visionText.trim()
+    let contentToDetect = visionText.trim()
       ? visionText.trim()
       : text.trim();
 
@@ -107,10 +132,16 @@ const Detection = () => {
 
     setError(null);
     setIsLoading(true);
+    
+
     try {
       const token = localStorage.getItem("access_token");
+      const apiUrl = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/detect/improved`;
 
-      const result = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/detect/improved`, {
+      console.log("Sending detection request to:", apiUrl);
+      console.log("Content to detect:", contentToDetect.substring(0, 100) + "...");
+
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -120,10 +151,27 @@ const Detection = () => {
           text: contentToDetect,
           use_improved_detection: true,
         }),
-      }).then((r) => r.json());
+      });
+
+      console.log("Response status:", response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("API error response:", errorText);
+        throw new Error(`API returned ${response.status}: ${errorText.substring(0, 200)}`);
+      }
+
+      const result = await response.json();
+      console.log("Detection result received:", result.success ? "Success" : "Failed");
 
 
       if (result.success) {
+        // If backend fetched URL content, display it in the text box
+        if ((result as any).fetched_content && (result as any).original_url) {
+          onTextChange((result as any).fetched_content);
+          console.log("Backend fetched content from URL, displayed in text box");
+        }
+        
         const finalPrediction = result.result.final_prediction;
         const predictionValue =
           typeof finalPrediction === "string"
@@ -167,11 +215,25 @@ const Detection = () => {
       }
     } catch (err) {
       console.error("Detection error:", err);
-      setError(
-        `Failed to connect to detection service: ${
-          err instanceof Error ? err.message : String(err)
-        }. Please try again.`
-      );
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      
+      // Check if it's a network/CORS error
+      if (errorMessage.includes("CORS") || errorMessage.includes("Failed to fetch") || errorMessage.includes("NetworkError") || errorMessage.includes("Network request failed")) {
+        setError(
+          `Network error: Cannot connect to backend. Please check:
+          1. Backend is running on http://localhost:8000
+          2. No firewall blocking the connection
+          3. Check browser console for more details`
+        );
+      } else if (errorMessage.includes("API returned")) {
+        setError(
+          `Backend API error: ${errorMessage}. Please check backend logs.`
+        );
+      } else {
+        setError(
+          `Detection failed: ${errorMessage}. Please try again or check browser console for details.`
+        );
+      }
     } finally {
       setIsLoading(false);
     }

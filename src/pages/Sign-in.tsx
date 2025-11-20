@@ -69,7 +69,7 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
       );
 
       try {
-        await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/firebase_sync`, {
+        const syncRes = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/auth/firebase_sync`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -78,6 +78,10 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
             display_name: res.user.displayName,
           }),
         });
+        const syncData = await syncRes.json();
+        if (syncData.access_token) {
+          localStorage.setItem("access_token", syncData.access_token);
+        }
       } catch {}
 
       setIsLoggedIn(true);

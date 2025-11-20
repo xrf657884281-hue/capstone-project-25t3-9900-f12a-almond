@@ -46,7 +46,7 @@ from config import Config
 from services.mongo_service import mongo_service
 from services.news_service import NewsService
 from services.pdf_service import PDFService
-from utils.security import create_access_token, require_active_user
+from utils.security import create_access_token, require_active_user, get_optional_active_user
 
 # Configure logging
 logging.basicConfig(
@@ -82,6 +82,175 @@ generation_service = None
 vision_service = None
 pdf_service = PDFService(storage_base_path=Config.PDF_STORAGE_BASE_PATH)
 
+# Utility Functions 
+def fetch_url_content(url: str, max_length: int = 10000) -> Optional[str]:
+    """
+    Fetch and extract text content from a URL
+    
+    Args:
+        url: URL to fetch
+        max_length: Maximum length of extracted text
+        
+    Returns:
+        Extracted text content or None if failed
+    """
+    try:
+        import urllib.request
+        import ssl
+        import re
+        import html
+        
+        # Validate URL
+        if not url.startswith(('http://', 'https://')):
+            return None
+        
+        # Create SSL context that doesn't verify certificates (for compatibility)
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        # Fetch URL with proper headers
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+        with urllib.request.urlopen(req, timeout=10, context=ssl_context) as resp:
+            raw = resp.read()
+        
+        # Decode HTML
+        text = raw.decode("utf-8", errors="ignore")
+        
+        # Remove scripts and styles
+        text = re.sub(r"<script[\s\S]*?</script>", " ", text, flags=re.IGNORECASE)
+        text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.IGNORECASE)
+        
+        # Try multiple extraction strategies
+        cleaned = []
+        
+        # Strategy 1: Prefer <article> content if available
+        article_match = re.search(r"<article[\s\S]*?</article>", text, flags=re.IGNORECASE)
+        if article_match:
+            candidate = article_match.group(0)
+            paragraphs = re.findall(r"<p[^>]*>([\s\S]*?)</p>", candidate, flags=re.IGNORECASE)
+            for p in paragraphs[:30]:
+                p_txt = re.sub(r"<[^>]+>", " ", p)
+                p_txt = html.unescape(p_txt)
+                p_txt = re.sub(r"\s+", " ", p_txt).strip()
+                if p_txt and len(p_txt) > 20:
+                    cleaned.append(p_txt)
+        
+        # Strategy 2: Extract from common content divs (if article didn't work)
+        if not cleaned:
+            # Try common content container classes
+            content_patterns = [
+                r'<div[^>]*class="[^"]*content[^"]*"[^>]*>([\s\S]*?)</div>',
+                r'<div[^>]*class="[^"]*article[^"]*"[^>]*>([\s\S]*?)</div>',
+                r'<div[^>]*class="[^"]*story[^"]*"[^>]*>([\s\S]*?)</div>',
+                r'<div[^>]*class="[^"]*body[^"]*"[^>]*>([\s\S]*?)</div>',
+            ]
+            for pattern in content_patterns:
+                matches = re.findall(pattern, text, flags=re.IGNORECASE)
+                if matches:
+                    for match in matches[:1]:  # Take first match
+                        paragraphs = re.findall(r"<p[^>]*>([\s\S]*?)</p>", match, flags=re.IGNORECASE)
+                        for p in paragraphs[:30]:
+                            p_txt = re.sub(r"<[^>]+>", " ", p)
+                            p_txt = html.unescape(p_txt)
+                            p_txt = re.sub(r"\s+", " ", p_txt).strip()
+                            if p_txt and len(p_txt) > 20:
+                                cleaned.append(p_txt)
+                    if cleaned:
+                        break
+        
+        # Strategy 3: Extract from JSON-LD structured data (common in news sites)
+        if not cleaned or len('\n\n'.join(cleaned)) < 200:
+            json_ld_matches = re.findall(r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>([\s\S]*?)</script>', text, flags=re.IGNORECASE)
+            for json_ld in json_ld_matches:
+                try:
+                    import json
+                    data = json.loads(json_ld)
+                    # Extract articleBody or description
+                    if isinstance(data, dict):
+                        if 'articleBody' in data:
+                            cleaned.append(data['articleBody'])
+                        if 'description' in data:
+                            cleaned.append(data['description'])
+                        if 'headline' in data:
+                            cleaned.append(data['headline'])
+                except:
+                    pass
+        
+        # Strategy 4: Extract from meta tags (og:description, description, etc.)
+        if not cleaned or len('\n\n'.join(cleaned)) < 200:
+            meta_patterns = [
+                r'<meta[^>]*property=["\']og:description["\'][^>]*content=["\']([^"\']+)["\']',
+                r'<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']+)["\']',
+                r'<meta[^>]*name=["\']twitter:description["\'][^>]*content=["\']([^"\']+)["\']',
+            ]
+            for pattern in meta_patterns:
+                matches = re.findall(pattern, text, flags=re.IGNORECASE)
+                for match in matches:
+                    desc = html.unescape(match).strip()
+                    if desc and len(desc) > 50:
+                        cleaned.append(desc)
+        
+        # Strategy 5: Extract all paragraphs from body 
+        if not cleaned:
+            paragraphs = re.findall(r"<p[^>]*>([\s\S]*?)</p>", text, flags=re.IGNORECASE)
+            for p in paragraphs[:50]: 
+                p_txt = re.sub(r"<[^>]+>", " ", p)
+                p_txt = html.unescape(p_txt)
+                p_txt = re.sub(r"\s+", " ", p_txt).strip()
+                # Filter out navigation, footer, etc.
+                if p_txt and len(p_txt) > 30 and not any(skip in p_txt.lower() for skip in ['cookie', 'privacy', 'terms', 'subscribe', 'newsletter']):
+                    cleaned.append(p_txt)
+        
+        # Strategy 6: Last resort - extract text from body tag
+        if not cleaned or len('\n\n'.join(cleaned)) < 200:
+            body_match = re.search(r"<body[^>]*>([\s\S]*?)</body>", text, flags=re.IGNORECASE)
+            if body_match:
+                body_text = body_match.group(1)
+                # Remove all HTML tags
+                body_text = re.sub(r"<[^>]+>", " ", body_text)
+                body_text = html.unescape(body_text)
+                body_text = re.sub(r"\s+", " ", body_text).strip()
+                # Split into sentences
+                sentences = re.split(r'[.!?]+\s+', body_text)
+                for sent in sentences[:100]:
+                    sent = sent.strip()
+                    if sent and len(sent) > 50:
+                        cleaned.append(sent)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_cleaned = []
+        for item in cleaned:
+            item_lower = item.lower().strip()
+            if item_lower and item_lower not in seen and len(item) > 20:
+                seen.add(item_lower)
+                unique_cleaned.append(item)
+        
+        fetched_text = "\n\n".join(unique_cleaned)
+        
+        # Limit length
+        if len(fetched_text) > max_length:
+            fetched_text = fetched_text[:max_length]
+        
+        if fetched_text.strip():
+            logger.info(f"Successfully fetched {len(fetched_text)} characters from URL: {url[:50]}...")
+            return fetched_text.strip()
+        else:
+            logger.warning(f"No content extracted from URL: {url}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Failed to fetch URL content from {url}: {e}")
+        return None
+
+def is_url(text: str) -> bool:
+    """Check if text is a URL"""
+    if not text or not isinstance(text, str):
+        return False
+    text = text.strip()
+    return text.startswith(('http://', 'https://')) and len(text) > 10
+
 # Pydantic models
 class DetectionRequest(BaseModel):
     text: str
@@ -110,11 +279,32 @@ class HybridDetectionRequest(BaseModel):
     image_url_or_b64: Optional[str] = None
     use_improved_detection: Optional[bool] = True
     detection_config: Optional[DetectionConfig] = None  # NEW: Custom configuration
+    
+class UrlFetchRequest(BaseModel):
+    url: str
 
 class BatchGenerationRequest(BaseModel):
     topics: List[str]
     samples_per_topic: Optional[int] = 5
     strategies: Optional[List[str]] = None
+
+
+@app.post("/api/url/fetch")
+async def fetch_url_endpoint(request: UrlFetchRequest):
+    """Fetch raw text from a URL without running detection."""
+    url = request.url.strip()
+    if not is_url(url):
+        raise HTTPException(status_code=400, detail="Invalid URL provided")
+    
+    content = fetch_url_content(url)
+    if not content:
+        raise HTTPException(status_code=422, detail="Failed to fetch content from URL")
+    
+    return {
+        "success": True,
+        "fetched_content": content,
+        "original_url": url
+    }
 
 # ============ Auth models ============
 class RegisterRequest(BaseModel):
@@ -152,7 +342,7 @@ class VisionDescribeRequest(BaseModel):
     detail_level: Optional[str] = "high"  # "low" | "high" | "auto"
     additional_prompt: Optional[str] = None
     output_mode: Optional[str] = "detailed"  # "detailed" | "concise"
-    max_chars: Optional[int] = None  # None or <=0 表示不截断
+    max_chars: Optional[int] = None  # None or <=0 means no truncation
 
 # Dependency injection  
 def get_detection_service():
@@ -505,6 +695,10 @@ async def firebase_sync(body: FirebaseSyncRequest, request: Request):
         }
     }
     res = users.update_one(key_filter, update_doc, upsert=True)
+    # Get the user document to retrieve user_id
+    user_doc = users.find_one(key_filter)
+    user_id = str(user_doc["_id"]) if user_doc else None
+    
     try:
         if mongo_service.is_connected():
             mongo_service.insert_one("user_activity_log", {
@@ -517,6 +711,23 @@ async def firebase_sync(body: FirebaseSyncRequest, request: Request):
             })
     except Exception:
         pass
+    
+    # Generate access token for the user
+    if user_id:
+        access_token = create_access_token(
+            user_id,
+            additional_claims={
+                "username": body.display_name or body.email or body.uid,
+                "email": str(body.email) if body.email else None,
+            },
+        )
+        return {
+            "success": True,
+            "upserted": bool(res.upserted_id),
+            "access_token": access_token,
+            "token_type": "bearer",
+            "expires_in": Config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        }
     return {"success": True, "upserted": bool(res.upserted_id)}
 
 @app.post("/api/auth/update_avatar")
@@ -555,25 +766,26 @@ async def update_avatar(body: UpdateAvatarRequest, request: Request):
 @app.put("/api/auth/update_profile")
 async def update_profile(body: UpdateProfileRequest, request: Request):
     """
-    更新用户个人信息
+    Update a user's profile information.
     
-    支持通过uid或username_or_email识别用户，可以更新：
+    The user can be identified by uid or username/email.
+    Supported fields:
     - username/display_name
     - email
     - avatar_url_or_b64
     
     Args:
-        body: 更新请求，包含用户标识和要更新的字段
+        body: Request payload containing the identifier and fields to update
     
     Returns:
-        更新结果
+        Update result
     """
     if not mongo_service.is_connected():
         raise HTTPException(status_code=503, detail="Database not connected")
     
     users = mongo_service.get_collection("users")
     
-    # 识别用户：优先使用uid，其次使用username_or_email
+    # Determine which identifier is provided (uid first, then username/email)
     query = None
     if body.uid:
         query = {"uid": body.uid}
@@ -582,45 +794,45 @@ async def update_profile(body: UpdateProfileRequest, request: Request):
     else:
         raise HTTPException(status_code=422, detail="Provide uid or username_or_email to identify user")
     
-    # 查找用户是否存在
+    # Verify user exists
     user = users.find_one(query)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # 构建更新文档
+    # Build update document
     update_doc: Dict[str, Any] = {
         "$set": {
             "updated_at": datetime.utcnow().isoformat()
         }
     }
     
-    # 检查是否有要更新的字段
+    # Track whether any field is actually updated
     has_updates = False
     
-    # 更新username（如果提供了display_name，优先使用display_name，否则使用username）
+    # Update username/display name, preferring display_name when provided
     if body.display_name is not None:
         update_doc["$set"]["display_name"] = body.display_name
-        # 如果原用户没有username，也更新username字段
+        # If username is missing, mirror the display_name
         if not user.get("username"):
             update_doc["$set"]["username"] = body.display_name
         has_updates = True
     elif body.username is not None:
         update_doc["$set"]["username"] = body.username
-        # 如果原用户没有display_name，也更新display_name字段
+        # If display_name is missing, mirror the username
         if not user.get("display_name"):
             update_doc["$set"]["display_name"] = body.username
         has_updates = True
     
-    # 更新email
+    # Update email
     if body.email is not None:
-        # 检查email是否已被其他用户使用
+        # Ensure no other user already owns the email
         existing_user = users.find_one({"email": str(body.email), "_id": {"$ne": user.get("_id")}})
         if existing_user:
             raise HTTPException(status_code=409, detail="Email already in use by another user")
         update_doc["$set"]["email"] = str(body.email)
         has_updates = True
     
-    # 更新头像
+    # Update avatar
     if body.avatar_url_or_b64 is not None:
         update_doc["$set"]["avatar_url_or_b64"] = body.avatar_url_or_b64
         has_updates = True
@@ -628,16 +840,16 @@ async def update_profile(body: UpdateProfileRequest, request: Request):
     if not has_updates:
         raise HTTPException(status_code=422, detail="No fields provided for update")
     
-    # 执行更新
+    # Execute update
     try:
         result = users.update_one(query, update_doc, bypass_document_validation=True)
         if result.modified_count == 0 and result.matched_count > 0:
-            # 用户存在但字段值相同，也算成功
+            # Treat identical values as success
             pass
         elif result.matched_count == 0:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # 记录活动日志
+        # Record activity log
         try:
             if mongo_service.is_connected():
                 mongo_service.insert_one("user_activity_log", {
@@ -674,20 +886,35 @@ async def baseline_detection(
     request: DetectionRequest,
     service: Any = Depends(get_detection_service),
     vision: Any = Depends(get_vision_service),
-    current_user: Dict[str, Any] = Depends(require_active_user),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_active_user),
     http_request: Request = None
 ):
     """Baseline detection"""
     try:
         logger.info(f"Baseline detection request for text: {request.text[:100]}...")
-        user_object_id = _current_user_object_id(current_user)
+        user_object_id = _current_user_object_id(current_user) if current_user else None
         user_summary = {
-            "id": str(user_object_id),
-            "username": current_user.get("username"),
-            "email": current_user.get("email"),
+            "id": str(user_object_id) if user_object_id else None,
+            "username": current_user.get("username") if current_user else None,
+            "email": current_user.get("email") if current_user else None,
         }
-        # Auto-generate description from image if text is empty
+        # Auto fetch URL content if text is a URL
         req_text = (request.text or '').strip()
+        if is_url(req_text):
+            logger.info(f"Detected URL input, fetching content from: {req_text[:80]}...")
+            try:
+                fetched_content = fetch_url_content(req_text)
+                if fetched_content:
+                    req_text = fetched_content
+                    logger.info(f"Successfully fetched {len(req_text)} characters from URL")
+                else:
+                    logger.warning(f"Failed to extract content from URL (may be JavaScript-rendered). Using URL as text for detection.")
+                    # Keep URL as text - detection can still work with URL
+            except Exception as e:
+                logger.error(f"Error fetching URL content: {e}. Using URL as text for detection.")
+                # Keep URL as text - detection can still work with URL
+        
+        # Auto-generate description from image if text is empty
         if (not req_text) and request.image_url_or_b64:
             try:
                 vision_res = vision.describe_image(request.image_url_or_b64, detail_level="high")
@@ -776,14 +1003,29 @@ async def improved_detection_endpoint(
     detection_service: Any = Depends(get_detection_service),
     improved_service: Any = Depends(get_improved_detection),
     vision: Any = Depends(get_vision_service),
-    current_user: Dict[str, Any] = Depends(require_active_user),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_active_user),
     http_request: Request = None
 ):
     """Improved detection with customizable configuration"""
     try:
         logger.info(f"Improved detection request for text: {request.text[:100]}...")
-        # Auto image description if text empty and image provided
+        # Auto fetch URL content if text is a URL
         req_text = (request.text or '').strip()
+        if is_url(req_text):
+            logger.info(f"Detected URL input, fetching content from: {req_text[:80]}...")
+            try:
+                fetched_content = fetch_url_content(req_text)
+                if fetched_content:
+                    req_text = fetched_content
+                    logger.info(f"Successfully fetched {len(req_text)} characters from URL")
+                else:
+                    logger.warning(f"Failed to extract content from URL (may be JavaScript-rendered). Using URL as text for detection.")
+                    # Keep URL as text - detection can still work with URL
+            except Exception as e:
+                logger.error(f"Error fetching URL content: {e}. Using URL as text for detection.")
+                # Keep URL as text - detection can still work with URL
+        
+        # Auto image description if text empty and image provided
         if (not req_text) and request.image_url_or_b64:
             try:
                 vision_res = vision.describe_image(request.image_url_or_b64, detail_level="high")
@@ -798,11 +1040,11 @@ async def improved_detection_endpoint(
         # Extract custom configuration
         config = request.detection_config.dict() if request.detection_config else {}
         logger.info(f"Detection configuration: {config}")
-        user_object_id = _current_user_object_id(current_user)
+        user_object_id = _current_user_object_id(current_user) if current_user else None
         user_summary = {
-            "id": str(user_object_id),
-            "username": current_user.get("username"),
-            "email": current_user.get("email"),
+            "id": str(user_object_id) if user_object_id else None,
+            "username": current_user.get("username") if current_user else None,
+            "email": current_user.get("email") if current_user else None,
         }
         
         if request.use_improved_detection:
@@ -881,12 +1123,18 @@ async def improved_detection_endpoint(
             except Exception:
                 pass
 
-            return {
+            response_data = {
                 "success": True,
                 "result": improved_results,
                 "record_id": str(inserted_id) if inserted_id else None,
                 "timestamp": datetime.now().isoformat()
             }
+            # If URL was fetched, include the fetched content in response
+            if is_url(request.text) and req_text != request.text:
+                response_data["fetched_content"] = req_text[:5000]  # Include first 5000 chars
+                response_data["original_url"] = request.text
+            
+            return response_data
         else:
             # Use baseline detection only
             result = detection_service.baseline_detection(
@@ -947,8 +1195,11 @@ async def generate_single(
         req_topic_override = None
         if (not (request.topic or '').strip()) and getattr(request, 'image_url_or_b64', None):
             try:
-                vision_res = vision.describe_image(request.image_url_or_b64, detail_level="high",
-                                                  additional_prompt="请将总结部分的第一句话简洁概括成一个适合新闻报道的话题标题。")
+                vision_res = vision.describe_image(
+                    request.image_url_or_b64,
+                    detail_level="high",
+                    additional_prompt="Please rewrite the first sentence of the summary as a concise, news-style headline."
+                )
                 if vision_res.get("success") and vision_res.get("description"):
                     first_line = vision_res["description"].splitlines()[0].strip()
                     req_topic_override = first_line[:120] if first_line else vision_res["description"][:120]
@@ -1608,7 +1859,7 @@ async def get_detection_history(
     user_object_id = _current_user_object_id(current_user)
     query: Dict[str, Any] = {"user_id": user_object_id}
     if q:
-        # 优先使用文本索引；没有则回退到正则
+        # Prefer text index; fall back to regex if necessary
         query["$or"] = [
             {"text": {"$regex": q, "$options": "i"}},
             {"type": {"$regex": q, "$options": "i"}}
@@ -1619,7 +1870,7 @@ async def get_detection_history(
     total = col.count_documents(query)
     cursor = col.find(query).sort("created_at", -1).skip(pg["skip"]).limit(pg["limit"])  # type: ignore
     items = list(cursor)
-    # 将 ObjectId 转成字符串，避免前端解析问题
+    # Convert ObjectId to string to keep responses JSON-friendly
     for it in items:
         if it.get("_id") is not None:
             it["_id"] = str(it["_id"])  # type: ignore
@@ -1633,19 +1884,19 @@ async def delete_detection_record(
     current_user: Dict[str, Any] = Depends(require_active_user)
 ):
     """
-    删除指定的检测记录
+    Delete a specific detection record.
     
     Args:
-        record_id: 要删除的记录ID（MongoDB ObjectId字符串）
-        user_id: 可选的用户ID，如果提供则验证记录是否属于该用户
+        record_id: MongoDB ObjectId string of the record
+        user_id: Optional user id, used to verify ownership when provided
     
     Returns:
-        删除结果
+        Deletion result
     """
     if not mongo_service.is_connected():
         raise HTTPException(status_code=503, detail="Database not connected")
     
-    # 验证ObjectId格式
+    # Validate ObjectId format
     try:
         object_id = ObjectId(record_id)
     except (InvalidId, Exception):
@@ -1653,11 +1904,11 @@ async def delete_detection_record(
     
     col = mongo_service.get_collection("detection_results")
     
-    # 构建查询条件
+    # Build query with ownership check
     user_object_id = _current_user_object_id(current_user)
     query: Dict[str, Any] = {"_id": object_id, "user_id": user_object_id}
     
-    # 先查找记录是否存在
+    # Ensure record exists before deletion
     record = col.find_one(query)
     if not record:
         raise HTTPException(
@@ -1665,7 +1916,7 @@ async def delete_detection_record(
             detail="Record not found or does not belong to the current user"
         )
     
-    # 删除记录
+    # Delete record
     try:
         result = col.delete_one({"_id": object_id})
         if result.deleted_count > 0:
@@ -1686,13 +1937,13 @@ async def download_detection_pdf(
     current_user: Dict[str, Any] = Depends(require_active_user)
 ):
     """
-    下载检测结果的PDF文件
+    Download the detection result PDF.
     
     Args:
-        record_id: 检测记录ID
+        record_id: Detection record ID
     
     Returns:
-        PDF文件响应
+        PDF file response
     """
     if not mongo_service.is_connected():
         raise HTTPException(status_code=503, detail="Database not connected")
@@ -1740,13 +1991,13 @@ async def download_generation_pdf(
     current_user: Dict[str, Any] = Depends(require_active_user)
 ):
     """
-    下载生成结果的PDF文件
+    Download the generation result PDF.
     
     Args:
-        record_id: 生成记录ID
+        record_id: Generation record ID
     
     Returns:
-        PDF文件响应
+        PDF file response
     """
     if not mongo_service.is_connected():
         raise HTTPException(status_code=503, detail="Database not connected")
@@ -1794,13 +2045,13 @@ async def generate_detection_pdf_on_demand(
     current_user: Dict[str, Any] = Depends(require_active_user)
 ):
     """
-  
+    Generate a detection PDF on demand for a specific record.
     
     Args:
-        record_id: 
+        record_id: Detection record ID
     
     Returns:
-      
+        Result containing the PDF URL if successful
     """
     if not mongo_service.is_connected():
         raise HTTPException(status_code=503, detail="Database not connected")
@@ -1851,13 +2102,13 @@ async def generate_generation_pdf_on_demand(
     current_user: Dict[str, Any] = Depends(require_active_user)
 ):
     """
-    按需生成生成结果的PDF
+    Generate a generation result PDF on demand.
     
     Args:
-        record_id: 生成记录ID
+        record_id: Generation record ID
     
     Returns:
-        生成结果
+        Result containing the PDF URL if successful
     """
     if not mongo_service.is_connected():
         raise HTTPException(status_code=503, detail="Database not connected")
