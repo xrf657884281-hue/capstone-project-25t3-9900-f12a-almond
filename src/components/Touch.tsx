@@ -9,10 +9,9 @@ import { Send } from "lucide-react"
 
 const Touch = () => {
   return (
-        <main className="grid gap-8">
-            <section className="px-6 py-10">
-                <h1 className="dark:text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider my-30">Keep touch with us</h1>
-
+        <main className="grid">
+            <section className="px-6 py-5">
+                <h1 className="dark:text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider">Keep touch with us</h1>
             </section>
 
             <section className="gap-6 p-10">

@@ -5,13 +5,12 @@ import EarthCanvas from "./earth/Earth"
 
 const Product = () => {
   return (
-    <main className="grid gap-8 root:bg-[#d5dce0] ">
-        <section className="px-6 py-10">
-            <h1 className="dark:text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider my-30">Why choose us?</h1>
-
+    <main className="grid root:bg-[#d5dce0] ">
+        <section className="px-6">
+            <h1 className="dark:text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider">Why choose us?</h1>
         </section>
 
-        <section className="grid gap-6 p-6 md:grid-cols-[1fr_2fr] md:min-h-screen">
+        <section className="grid p-6 md:grid-cols-[1fr_2fr] md:min-h-screen">
             <div className="mx-2">
                 <Separator className="my-10 dark:bg-white/20 bg-gray-400 h-[2px]" />
                 <div className="inline-flex items-center gap-2">

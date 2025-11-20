@@ -6,8 +6,8 @@ import Spline from '@splinetool/react-spline'
 
 const Hero = () => {
   return (
-    <main className='flex lg:mt-20 flex-col lg:flex-row items-center justify-between min-h-[calc(90vh-6rem)]'>
-        <div className="max-w-xl ml-[5%] z-10 mt-[90%] md:mt-[60%] lg:mt-0">
+    <main className='relative flex lg:mt-20 flex-col lg:flex-row items-center justify-between min-h-[calc(90vh-6rem)] overflow-hidden'>
+        <div className="max-w-xl ml-[5%] z-10 mt-[90%] md:mt-[60%] lg:mt-[-8%] lg:ml-[13%]">
             <Link to="/about">
               <div className="relative w-[95%] sm:w-48 h-10 bg-gradient-to-r from-[#656565] to-[#e99b63] dark:shadow-[0_0_15px_rgba(255,255,255,0.4)] rounded-full hover:opacity-75">
                   <div className="absolute inset-[3px] dark:bg-black rounded-full flex items-center justify-center gap-1 text-white ">
@@ -41,13 +41,10 @@ const Hero = () => {
                 </Link>
             </div>
         </div>
-
-        {/**3D model */}
-        <Spline className="absolute lg:top-0 top-[-20%] buttom-0 lg:left-[25%] sm:left-[-2%] h-full" scene="https://prod.spline.design/FDHcSpYgnuaP1u4Y/scene.splinecode" />
-
-        
-
-      
+        <Spline 
+          className="absolute top-[-20%] bottom-0 lg:left-[25%] sm:left-[-2%] h-full w-auto" 
+          scene="https://prod.spline.design/FDHcSpYgnuaP1u4Y/scene.splinecode" 
+        />
     </main>
   )
 }

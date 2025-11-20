@@ -32,10 +32,10 @@ const Guide = () => {
   };
 
   return (
-    <main className="grid gap-8 transition-all duration-300">
-      <section className="px-6 py-10">
-        <h1 className="dark:text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider my-30">
-          How you can start?
+    <main className="grid transition-all duration-300">
+      <section className="px-6">
+        <h1 className="dark:text-white text-3xl font-semibold text-black/90 sm:text-4xl md:text-5xl lg:text-6xl tracking-wider">
+          How our system work?
         </h1>
       </section>
 
@@ -84,16 +84,16 @@ const Guide = () => {
               </CardContent>
 
               {/* Big window location */}
-              <CardContent className="hidden lg:block h-[800px] lg:grid lg:grid-cols-12">
+              <CardContent className="hidden lg:block h-[500px] lg:grid lg:grid-cols-12">
                 <div className="col-span-7">
-                  <Canvas camera={{ position: [0, 0, 3], fov: 45 }}>
+                  <Canvas camera={{ position: [0, 0, 3], fov: 35 }}>
                     <ambientLight intensity={0.5} />
                     <directionalLight position={[10, 10, 5]} intensity={1} />
                     <Book pageImages={currentPages} />
                   </Canvas>
                 </div>
 
-                <ScrollArea className="col-start-8 col-end-12 h-[800px] w-full rounded-md border p-4">
+                <ScrollArea className="col-start-8 col-end-12 h-[500px] w-full rounded-md border p-4">
                   <Accordion type="multiple">
                     {Generation_Items.map(({ id, title, content }) => (
                       <AccordionItem key={id} value={id}>
@@ -142,8 +142,8 @@ const Guide = () => {
               </CardContent>
 
               {/* Big window location */}
-              <CardContent className="hidden lg:block h-[800px] lg:grid lg:grid-cols-12">
-                <ScrollArea className="col-start-2 col-end-6 justify-self-end h-[800px] w-full rounded-md border p-4">
+              <CardContent className="hidden lg:block h-[500px] lg:grid lg:grid-cols-12">
+                <ScrollArea className="col-start-2 col-end-6 justify-self-end h-[500px] w-full rounded-md border p-4">
                   <Accordion type="multiple">
                     {Detection_Items.map(({ id, title, content }) => (
                       <AccordionItem key={id} value={id}>
@@ -159,7 +159,7 @@ const Guide = () => {
                 </ScrollArea>
 
                 <div className="col-start-6 col-end-13">
-                  <Canvas camera={{ position: [0, 0, 3], fov: 45 }}>
+                  <Canvas camera={{ position: [0, 0, 3], fov: 35 }}>
                     <ambientLight intensity={0.5} />
                     <directionalLight position={[10, 10, 5]} intensity={1} />
                     <Book pageImages={currentPages} />
@@ -200,16 +200,16 @@ const Guide = () => {
               </CardContent>
 
               {/* Big window location */}
-              <CardContent className="hidden lg:block h-[800px] lg:grid lg:grid-cols-12">
+              <CardContent className="hidden lg:block h-[500px] lg:grid lg:grid-cols-12">
                 <div className="col-span-7">
-                  <Canvas camera={{ position: [0, 0, 3], fov: 45 }}>
+                  <Canvas camera={{ position: [0, 0, 3], fov: 35 }}>
                     <ambientLight intensity={0.5} />
                     <directionalLight position={[10, 10, 5]} intensity={1} />
                     <Book pageImages={currentPages} />
                   </Canvas>
                 </div>
 
-                <ScrollArea className="col-start-8 col-end-12 h-[800px] w-full rounded-md border p-4">
+                <ScrollArea className="col-start-8 col-end-12 h-[500px] w-full rounded-md border p-4">
                   <Accordion type="multiple">
                     {Generation_Items.map(({ id, title, content }) => (
                       <AccordionItem key={id} value={id}>
@@ -258,8 +258,8 @@ const Guide = () => {
               </CardContent>
 
               {/* Big window location */}
-              <CardContent className="hidden lg:block h-[800px] lg:grid lg:grid-cols-12">
-                <ScrollArea className="col-start-2 col-end-6 justify-self-end h-[800px] w-full rounded-md border p-4">
+              <CardContent className="hidden lg:block h-[500px] lg:grid lg:grid-cols-12">
+                <ScrollArea className="col-start-2 col-end-6 justify-self-end h-[500px] w-full rounded-md border p-4">
                   <Accordion type="multiple">
                     {Detection_Items.map(({ id, title, content }) => (
                       <AccordionItem key={id} value={id}>
@@ -275,7 +275,7 @@ const Guide = () => {
                 </ScrollArea>
 
                 <div className="col-start-6 col-end-13">
-                  <Canvas camera={{ position: [0, 0, 3], fov: 45 }}>
+                  <Canvas camera={{ position: [0, 0, 3], fov: 35 }}>
                     <ambientLight intensity={0.5} />
                     <directionalLight position={[10, 10, 5]} intensity={1} />
                     <Book pageImages={currentPages} />
@@ -286,8 +286,6 @@ const Guide = () => {
           </TabsContent>
         </Tabs>
       </section>
-
-      <section className="pb-24 lg:pb-32"></section>
     </main>
   )
 }
