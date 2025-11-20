@@ -1398,6 +1398,9 @@ class ImprovedDetection:
         
                                                        
         final_fake_prob = min(1.0, max(0.0, base_fake_prob + consistency_adjustment + rhetorical_adjustment + tavily_adjustment + contradiction_penalty + tavily_boost))
+        # Recompute confidence after adjustments
+        final_confidence = abs(final_fake_prob - 0.5) * 2
+        final_confidence = max(0.0, min(1.0, final_confidence))
         
                               
         explanation = {
@@ -1411,7 +1414,7 @@ class ImprovedDetection:
             'wikipedia_boost': tavily_boost,                                   
             'tavily_boost': tavily_boost,
             'final_score': final_fake_prob,
-            'confidence': fusion_result.get('confidence', 0.5),
+            'confidence': final_confidence,
             'key_factors': []
         }
         
@@ -1453,7 +1456,7 @@ class ImprovedDetection:
         return {
             'prediction': 'fake' if final_fake_prob > threshold else 'real',                        
             'fake_probability': final_fake_prob,
-            'confidence': explanation['confidence'],
+            'confidence': final_confidence,
             'explanation': explanation,
             'threshold_used': threshold                                 
         }

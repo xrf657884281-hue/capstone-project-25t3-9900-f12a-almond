@@ -466,6 +466,9 @@ const Generate = () => {
       const finalPrompt = `${parts.join(" ")} about: ${basePrompt}`;
 
       const token = localStorage.getItem("access_token");
+      const rawUser = localStorage.getItem("user");
+      const parsedUser = rawUser ? JSON.parse(rawUser) : {};
+      const userId = parsedUser.uid ?? null;
 
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/generate/single`, {
         method: "POST",
@@ -474,8 +477,13 @@ const Generate = () => {
           "Authorization": token ? `Bearer ${token}` : "",
         },
         body: JSON.stringify({
+          user_id: userId, 
           topic: finalPrompt,
           image_url_or_b64: image ? await fileToBase64(image) : undefined,
+          params: {
+            style: tone,    // "Formal" | "Sensational" | "Fun" | "Normal"
+            domain: topic,  // "Politics" | "Business" | ... | "General"
+          },
         }),
       }).then((r) => r.json());
 
@@ -568,7 +576,7 @@ const Generate = () => {
         <h1 className="text-4xl font-bold mb-6 leading-snug">
           AI Fake News Generator
           <span className="text-lg font-normal ml-2 text-blue-600 dark:text-blue-400">
-            Powered by Chat-GPT-4o
+            Powered by LLM
           </span>
         </h1>
         <p className="text-lg text-muted-foreground mb-4">

@@ -3,7 +3,7 @@
 type StatCardProps = {
   label: string;
   value: number;
-  color: "blue" | "purple" | "green" | "red" | "yellow" | "amber" | "muted";
+  color:"blue" | "purple" | "green" | "red" | "yellow" | "amber" | "pink" | "indigo" | "cyan" | "gray" | "muted";
   isSelected?: boolean;
   onClick?: () => void;
 };
@@ -50,6 +50,34 @@ const colorClasses = {
     selectedBg: "bg-amber-100 dark:bg-amber-900/40",
     ring: "ring-amber-600",
     text: "text-amber-600",
+  },
+  pink: {
+    bg: "bg-pink-50 dark:bg-pink-900/20",
+    hoverBg: "hover:bg-pink-100 dark:hover:bg-pink-900/30",
+    selectedBg: "bg-pink-100 dark:bg-pink-900/40",
+    ring: "ring-pink-600",
+    text: "text-pink-600",
+  },
+  indigo: {
+    bg: "bg-indigo-50 dark:bg-indigo-900/20",
+    hoverBg: "hover:bg-indigo-100 dark:hover:bg-indigo-900/30",
+    selectedBg: "bg-indigo-100 dark:bg-indigo-900/40",
+    ring: "ring-indigo-600",
+    text: "text-indigo-600",
+  },
+  cyan: {
+    bg: "bg-cyan-50 dark:bg-cyan-900/20",
+    hoverBg: "hover:bg-cyan-100 dark:hover:bg-cyan-900/30",
+    selectedBg: "bg-cyan-100 dark:bg-cyan-900/40",
+    ring: "ring-cyan-600",
+    text: "text-cyan-600",
+  },
+  gray: {
+    bg: "bg-gray-50 dark:bg-gray-900/20",
+    hoverBg: "hover:bg-gray-100 dark:hover:bg-gray-900/30",
+    selectedBg: "bg-gray-100 dark:bg-gray-900/40",
+    ring: "ring-gray-600",
+    text: "text-gray-600",
   },
   muted: {
     bg: "bg-muted",

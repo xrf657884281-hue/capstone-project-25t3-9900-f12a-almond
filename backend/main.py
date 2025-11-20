@@ -932,13 +932,17 @@ async def generate_single(
     service: Any = Depends(get_generation_service),
     news_service: Any = Depends(get_news_service),
     vision: Any = Depends(get_vision_service),
-    http_request: Request = None
+    http_request: Request = None,
+    current_user: Dict[str, Any] = Depends(require_active_user)
 ):
     """Generate single fake news sample - automatically searches for real news and generates based on it"""
     try:
         logger.info(f"Generation request for topic: {request.topic}")
-        user_object_id = None
-        user_summary: Dict[str, Any] = {}
+        user_object_id = current_user["_id"]     
+        user_summary = {
+            "username": current_user.get("username"),
+            "email": current_user.get("email")
+        }
         # If topic empty but image provided, auto generate topic from image
         req_topic_override = None
         if (not (request.topic or '').strip()) and getattr(request, 'image_url_or_b64', None):
@@ -1275,6 +1279,7 @@ async def generate_single(
                     "params": request_dict,
                     "result": result,
                     "created_at": datetime.utcnow().isoformat(),
+                    "user_id": user_object_id,
                 }
                 if user_object_id is not None:
                     generation_doc["user_id"] = user_object_id
@@ -1789,13 +1794,13 @@ async def generate_detection_pdf_on_demand(
     current_user: Dict[str, Any] = Depends(require_active_user)
 ):
     """
-    按需生成检测结果的PDF
+  
     
     Args:
-        record_id: 检测记录ID
+        record_id: 
     
     Returns:
-        生成结果
+      
     """
     if not mongo_service.is_connected():
         raise HTTPException(status_code=503, detail="Database not connected")
