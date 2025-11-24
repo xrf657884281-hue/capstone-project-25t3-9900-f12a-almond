@@ -97,6 +97,6 @@ class Config:
 
     @classmethod
     def get_mongo_url(cls) -> str:
-        """获取 Mongo 连接字符串（优先使用已设置的 MONGODB_URL）"""
+        """Get Mongo connection string (prefer MONGODB_URL if set)"""
         return cls.MONGODB_URL
     

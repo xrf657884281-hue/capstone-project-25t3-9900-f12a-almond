@@ -1,10 +1,10 @@
-// 演示数据插入
-// 该脚本会在容器首次启动时自动执行（在 001_create_collections.js 和 002_indexes.js 之后）
+// Demo data insertion
+// This script will be automatically executed when the container first starts (after 001_create_collections.js and 002_indexes.js)
 
 const dbName = process.env.MONGO_INITDB_DATABASE || 'fakenews_db';
 const db = db.getSiblingDB(dbName);
 
-// === 演示用户数据 ===
+// === Demo User Data ===
 const demoUsers = [
   {
     username: 'admin',
@@ -38,15 +38,15 @@ const demoUsers = [
   }
 ];
 
-// 插入演示用户（如果不存在）
+// Insert demo users (if not exists)
 demoUsers.forEach(user => {
   if (db.users.countDocuments({ username: user.username }) === 0) {
     db.users.insertOne(user);
-    print(`插入演示用户: ${user.username}`);
+    print(`Inserted demo user: ${user.username}`);
   }
 });
 
-// === 演示检测结果 ===
+// === Demo Detection Results ===
 const demoDetectionResults = [
   {
     type: 'baseline',
@@ -115,15 +115,15 @@ const demoDetectionResults = [
   }
 ];
 
-// 插入演示检测结果
+// Insert demo detection results
 demoDetectionResults.forEach((result, index) => {
   if (db.detection_results.countDocuments({ text: result.text }) === 0) {
     db.detection_results.insertOne(result);
-    print(`插入演示检测结果 ${index + 1}`);
+    print(`Inserted demo detection result ${index + 1}`);
   }
 });
 
-// === 演示生成结果 ===
+// === Demo Generation Results ===
 const demoGenerationResults = [
   {
     topic: 'technology',
@@ -196,7 +196,7 @@ const demoGenerationResults = [
   }
 ];
 
-// 插入演示生成结果
+// Insert demo generation results
 demoGenerationResults.forEach((result, index) => {
   if (db.generation_results.countDocuments({ 
     topic: result.topic, 
@@ -204,11 +204,11 @@ demoGenerationResults.forEach((result, index) => {
     "result.content": result.result.content
   }) === 0) {
     db.generation_results.insertOne(result);
-    print(`插入演示生成结果 ${index + 1}`);
+    print(`Inserted demo generation result ${index + 1}`);
   }
 });
 
-// === 演示用户活动日志 ===
+// === Demo User Activity Logs ===
 const demoActivityLogs = [
   {
     user_id: 'admin',
@@ -230,7 +230,7 @@ const demoActivityLogs = [
   }
 ];
 
-// 插入演示活动日志
+// Insert demo activity logs
 demoActivityLogs.forEach((log, index) => {
   if (db.user_activity_log.countDocuments({ 
     user_id: log.user_id,
@@ -238,18 +238,18 @@ demoActivityLogs.forEach((log, index) => {
     created_at: log.created_at
   }) === 0) {
     db.user_activity_log.insertOne(log);
-    print(`插入演示活动日志 ${index + 1}`);
+    print(`Inserted demo activity log ${index + 1}`);
   }
 });
 
-print("=== 演示数据插入完成 ===");
-print("已插入以下演示数据：");
-print("- 3个演示用户（admin, researcher, tester）");
-print("- 2个检测结果示例");
-print("- 3个生成结果示例");
-print("- 3个用户活动日志示例");
+print("=== Demo Data Insertion Complete ===");
+print("Inserted the following demo data:");
+print("- 3 demo users (admin, researcher, tester)");
+print("- 2 detection result examples");
+print("- 3 generation result examples");
+print("- 3 user activity log examples");
 print("");
-print("演示用户登录信息：");
+print("Demo user login credentials:");
 print("- admin / admin123");
 print("- researcher / researcher123");
 print("- tester / tester123");

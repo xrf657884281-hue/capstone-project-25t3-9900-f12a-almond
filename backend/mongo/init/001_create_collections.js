@@ -1,10 +1,10 @@
-// 初始化数据库、集合、校验器与索引
-// 该脚本会在容器首次启动时自动执行
+// Initialize database, collections, validators and indexes
+// This script will be automatically executed when the container first starts
 
 const dbName = process.env.MONGO_INITDB_DATABASE || 'fakenews_db';
 const db = db.getSiblingDB(dbName);
 
-// users 集合 + 校验
+// users collection + validation
 if (!db.getCollectionNames().includes('users')) {
   db.createCollection('users', {
     validator: {
@@ -30,7 +30,7 @@ if (!db.getCollectionNames().includes('users')) {
 db.users.createIndex({ username: 1 }, { unique: true });
 db.users.createIndex({ email: 1 }, { unique: true });
 
-// user_sessions 集合 + 校验
+// user_sessions collection + validation
 if (!db.getCollectionNames().includes('user_sessions')) {
   db.createCollection('user_sessions', {
     validator: {
@@ -53,7 +53,7 @@ if (!db.getCollectionNames().includes('user_sessions')) {
 db.user_sessions.createIndex({ session_token: 1 }, { unique: true });
 db.user_sessions.createIndex({ user_id: 1, is_active: 1 });
 
-// user_activity_log 集合
+// user_activity_log collection
 if (!db.getCollectionNames().includes('user_activity_log')) {
   db.createCollection('user_activity_log', {
     validator: {
@@ -74,7 +74,7 @@ if (!db.getCollectionNames().includes('user_activity_log')) {
 }
 db.user_activity_log.createIndex({ user_id: 1, created_at: -1 });
 
-// detection_results 集合 + 校验
+// detection_results collection + validation
 if (!db.getCollectionNames().includes('detection_results')) {
   db.createCollection('detection_results', {
     validator: {
@@ -100,7 +100,7 @@ if (!db.getCollectionNames().includes('detection_results')) {
 db.detection_results.createIndex({ created_at: -1 });
 db.detection_results.createIndex({ type: 1, created_at: -1 });
 
-// generation_results 集合 + 校验
+// generation_results collection + validation
 if (!db.getCollectionNames().includes('generation_results')) {
   db.createCollection('generation_results', {
     validator: {
@@ -125,7 +125,7 @@ if (!db.getCollectionNames().includes('generation_results')) {
 db.generation_results.createIndex({ created_at: -1 });
 db.generation_results.createIndex({ topic: 1, created_at: -1 });
 
-// 初始示例用户（若不存在）
+// Initial example user (if not exists)
 if (db.users.countDocuments({ username: 'testuser' }) === 0) {
   db.users.insertOne({
     username: 'testuser',

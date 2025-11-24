@@ -13,13 +13,13 @@ class WikipediaVerifier:
         self.session.headers.update({
             'User-Agent': 'FakeNewsDetectionSystem/1.0 (Educational Purpose; https://github.com/fakenews-detection) Python/requests'
         })
-        # 增加缓存大小和超时设置
+        # Increase cache size and timeout settings
         self.cache = {}
-        self.cache_size_limit = 1000  # 限制缓存大小
-        self.timeout = 5  # 减少超时时间
+        self.cache_size_limit = 1000  # Limit cache size
+        self.timeout = 5  # Reduce timeout
         
     def search_wikipedia(self, query: str, limit: int = 5) -> List[Dict]:
-        """搜索Wikipedia页面"""
+        """Search Wikipedia pages"""
         cache_key = f"{query}_{limit}"
         if cache_key in self.cache:
             return self.cache[cache_key]
@@ -47,9 +47,9 @@ class WikipediaVerifier:
                         'timestamp': item.get('timestamp', '')
                     })
             
-            # 管理缓存大小
+            # Manage cache size
             if len(self.cache) >= self.cache_size_limit:
-                # 删除最旧的缓存项
+                # Remove oldest cache entry
                 oldest_key = next(iter(self.cache))
                 del self.cache[oldest_key]
             
@@ -60,7 +60,7 @@ class WikipediaVerifier:
             return []
     
     def get_page_content(self, title: str) -> Optional[str]:
-        """获取Wikipedia页面内容"""
+        """Get Wikipedia page content"""
         cache_key = f"content_{title}"
         if cache_key in self.cache:
             return self.cache[cache_key]
@@ -92,7 +92,7 @@ class WikipediaVerifier:
             return None
     
     def verify_entity(self, entity: str) -> Dict:
-        """验证实体是否在Wikipedia中存在"""
+        """Verify if entity exists in Wikipedia"""
         results = self.search_wikipedia(entity, limit=3)
         
         if not results:
@@ -103,7 +103,7 @@ class WikipediaVerifier:
                 'sources': []
             }
         
-        # 检查标题匹配度
+        # Check title match score
         best_match = None
         best_score = 0.0
         
@@ -111,7 +111,7 @@ class WikipediaVerifier:
             title = result['title'].lower()
             entity_lower = entity.lower()
             
-            # 计算匹配分数
+            # Calculate match score
             if title == entity_lower:
                 score = 1.0
             elif entity_lower in title or title in entity_lower:
@@ -131,8 +131,8 @@ class WikipediaVerifier:
         }
     
     def verify_claim(self, claim: str) -> Dict:
-        """验证声明是否在Wikipedia中得到支持"""
-        # 提取关键词进行搜索
+        """Verify if claim is supported in Wikipedia"""
+        # Extract keywords for search
         keywords = self._extract_keywords(claim)
         if not keywords:
             return {
@@ -142,8 +142,8 @@ class WikipediaVerifier:
                 'sources': []
             }
         
-        # 搜索相关页面
-        search_query = ' '.join(keywords[:3])  # 使用前3个关键词
+        # Search related pages
+        search_query = ' '.join(keywords[:3])  # Use first 3 keywords
         results = self.search_wikipedia(search_query, limit=5)
         
         if not results:
@@ -154,7 +154,7 @@ class WikipediaVerifier:
                 'sources': []
             }
         
-        # 检查内容匹配度
+        # Check content match score
         verified_sources = []
         total_confidence = 0.0
         contradiction_found = False
@@ -164,12 +164,12 @@ class WikipediaVerifier:
             if content:
                 confidence = self._calculate_claim_confidence(claim, content)
                 
-                # 检查是否存在矛盾
+                # Check for contradictions
                 if self._check_contradiction(claim, content):
                     contradiction_found = True
-                    confidence = 0.0  # 发现矛盾时置信度为0
+                    confidence = 0.0  # Set confidence to 0 when contradiction found
                 
-                if confidence > 0.3:  # 阈值
+                if confidence > 0.3:  # Threshold
                     verified_sources.append({
                         'title': result['title'],
                         'snippet': result['snippet'],
@@ -177,7 +177,7 @@ class WikipediaVerifier:
                     })
                     total_confidence += confidence
         
-        # 如果发现矛盾，声明未验证
+        # If contradiction found, claim not verified
         if contradiction_found and len(verified_sources) == 0:
             return {
                 'claim': claim,
@@ -195,29 +195,29 @@ class WikipediaVerifier:
         }
     
     def verify_news_content(self, text: str) -> Dict:
-        """验证新闻内容的整体可信度"""
+        """Verify overall credibility of news content"""
         try:
-            # 提取实体和声明
+            # Extract entities and claims
             entities = self._extract_entities(text)
             claims = self._extract_claims(text)
             
-            # 验证实体
+            # Verify entities
             entity_results = []
             for entity in entities:
                 result = self.verify_entity(entity)
                 entity_results.append(result)
             
-            # 验证声明
+            # Verify claims
             claim_results = []
             for claim in claims:
                 result = self.verify_claim(claim)
                 claim_results.append(result)
             
-            # 计算综合得分
+            # Calculate overall score
             entity_score = sum(r['confidence'] for r in entity_results) / len(entity_results) if entity_results else 0.0
             claim_score = sum(r['confidence'] for r in claim_results) / len(claim_results) if claim_results else 0.0
             
-            # 计算覆盖率
+            # Calculate coverage
             entities_found = sum(1 for r in entity_results if r['found'])
             claims_verified = sum(1 for r in claim_results if r['verified'])
             
@@ -226,11 +226,11 @@ class WikipediaVerifier:
             
             wikipedia_coverage = (entities_found + claims_verified) / (total_entities + total_claims) if (total_entities + total_claims) > 0 else 0.0
             
-            # 🔥 大大提高实体和声明的权重，并进行归一化
-            entity_weight = 0.7  # 从 0.4 大大提高 to 0.7
-            claim_weight = 0.8   # 从 0.6 大大提高 to 0.8
+            # Greatly increase entity and claim weights, and normalize
+            entity_weight = 0.7  # Increased from 0.4 to 0.7
+            claim_weight = 0.8   # Increased from 0.6 to 0.8
             
-            # 归一化处理，确保得分在0-1之间
+            # Normalize to ensure score is between 0-1
             overall_score = ((entity_score * entity_weight) + (claim_score * claim_weight)) / (entity_weight + claim_weight) if (entity_score > 0 or claim_score > 0) else 0.0
             
             return {
@@ -263,64 +263,64 @@ class WikipediaVerifier:
             }
     
     def _extract_entities(self, text: str) -> List[str]:
-        """提取文本中的实体（优化版本）"""
-        # 简单的实体提取（可以改进为使用NER模型）
+        """Extract entities from text (optimized version)"""
+        # Simple entity extraction (can be improved with NER model)
         entities = []
         
-        # 提取人名（大写字母开头的单词）
+        # Extract person names (capitalized words)
         names = re.findall(r'\b[A-Z][a-z]+ [A-Z][a-z]+\b', text)
         entities.extend(names)
         
-        # 提取地名和组织名
+        # Extract place and organization names
         places = re.findall(r'\b[A-Z][a-z]+ (?:City|State|Country|University|Company|Corporation)\b', text)
         entities.extend(places)
         
-        # 提取其他大写开头的专有名词
+        # Extract other capitalized proper nouns
         proper_nouns = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', text)
         entities.extend([noun for noun in proper_nouns if len(noun.split()) <= 3])
         
-        # 去重并限制数量，减少API调用
-        unique_entities = list(set(entities))[:5]  # 从10减少到5
+        # Deduplicate and limit count to reduce API calls
+        unique_entities = list(set(entities))[:5]  # Reduced from 10 to 5
         return unique_entities
     
     def _extract_claims(self, text: str) -> List[str]:
-        """提取文本中的声明（改进版本）"""
+        """Extract claims from text (improved version)"""
         claims = []
         
-        # 提取包含动词的句子
+        # Extract sentences containing verbs
         sentences = re.split(r'[.!?]+', text)
         for sentence in sentences:
             sentence = sentence.strip()
-            if len(sentence) > 10 and len(sentence) < 200:  # 降低最小长度要求
-                # 检查是否包含事实性动词
+            if len(sentence) > 10 and len(sentence) < 200:  # Lowered minimum length requirement
+                # Check if contains factual verbs
                 fact_verbs = ['is', 'was', 'are', 'were', 'has', 'have', 'had', 'will', 'can', 'could', 'should', 'must', 'located', 'built', 'created', 'founded']
                 if any(verb in sentence.lower() for verb in fact_verbs):
                     claims.append(sentence)
         
-        # 如果没有找到声明，尝试更宽泛的提取
+        # If no claims found, try broader extraction
         if not claims:
-            # 按逗号分割，提取独立的事实陈述
+            # Split by comma, extract independent factual statements
             parts = re.split(r'[,;]', text)
             for part in parts:
                 part = part.strip()
                 if len(part) > 5 and len(part) < 100:
-                    # 检查是否包含实体或数字
+                    # Check if contains entities or numbers
                     if re.search(r'[A-Z][a-z]+|[\d]+', part):
                         claims.append(part)
         
-        return claims[:5]  # 增加声明数量
+        return claims[:5]  # Increased claim count
     
     def _extract_keywords(self, text: str) -> List[str]:
-        """提取关键词"""
-        # 简单的关键词提取
+        """Extract keywords"""
+        # Simple keyword extraction
         words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
         
-        # 过滤停用词
+        # Filter stop words
         stop_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'between', 'among', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'a', 'an', 'some', 'any', 'all', 'both', 'each', 'every', 'other', 'another', 'such', 'no', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'now'}
         
         keywords = [word for word in words if word not in stop_words]
         
-        # 按频率排序
+        # Sort by frequency
         word_freq = {}
         for word in keywords:
             word_freq[word] = word_freq.get(word, 0) + 1
@@ -329,11 +329,11 @@ class WikipediaVerifier:
         return [word for word, freq in sorted_words[:10]]
     
     def _calculate_claim_confidence(self, claim: str, content: str) -> float:
-        """计算声明在内容中的置信度"""
+        """Calculate confidence of claim in content"""
         claim_words = set(claim.lower().split())
         content_words = set(content.lower().split())
         
-        # 计算词汇重叠度
+        # Calculate word overlap
         overlap = len(claim_words.intersection(content_words))
         total_words = len(claim_words)
         
@@ -343,40 +343,40 @@ class WikipediaVerifier:
         return min(1.0, overlap / total_words)
     
     def _check_contradiction(self, claim: str, content: str) -> bool:
-        """检查声明是否与Wikipedia内容矛盾"""
+        """Check if claim contradicts Wikipedia content"""
         claim_lower = claim.lower()
         content_lower = content.lower()
         
-        # 检查地理位置矛盾
+        # Check geographic location contradictions
         if 'located in' in claim_lower or 'is in' in claim_lower:
-            # 提取声明中的地点
+            # Extract location from claim
             location_match = re.search(r'located in ([^,.\n]+)|is in ([^,.\n]+)', claim_lower)
             if location_match:
                 claimed_location = location_match.group(1) or location_match.group(2)
                 claimed_location = claimed_location.strip()
                 
-                # 检查Wikipedia内容中是否有矛盾的地点信息
+                # Check if Wikipedia content has contradictory location info
                 if claimed_location in content_lower:
-                    # 如果找到相同地点，检查上下文
+                    # If same location found, check context
                     context_start = max(0, content_lower.find(claimed_location) - 100)
                     context_end = min(len(content_lower), content_lower.find(claimed_location) + 100)
                     context = content_lower[context_start:context_end]
                     
-                    # 检查是否有否定的上下文
+                    # Check for negative context
                     negative_words = ['not', 'never', 'incorrect', 'wrong', 'false', 'mistake']
                     if any(word in context for word in negative_words):
                         return True
                 else:
-                    # 如果Wikipedia中没有提到该地点，可能表示矛盾
+                    # If Wikipedia doesn't mention this location, may indicate contradiction
                     return True
         
-        # 检查时间矛盾
+        # Check time contradictions
         if 'built in' in claim_lower or 'founded in' in claim_lower:
             year_match = re.search(r'(built|founded) in (\d{4})', claim_lower)
             if year_match:
                 claimed_year = year_match.group(2)
                 if claimed_year in content_lower:
-                    # 检查是否有不同的年份
+                    # Check for different years
                     other_years = re.findall(r'\b(19|20)\d{2}\b', content_lower)
                     if other_years and claimed_year not in other_years:
                         return True
@@ -384,5 +384,5 @@ class WikipediaVerifier:
         return False
     
     def _clean_html(self, text: str) -> str:
-        """清理HTML标签"""
+        """Clean HTML tags"""
         return re.sub(r'<[^>]+>', '', text)

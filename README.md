@@ -9,7 +9,7 @@ A comprehensive AI-powered fake news detection and generation system built with 
 - Node.js 16+
 - Git
 
-> **📖 简洁版命令指南：** 查看 [QUICK_START.md](./QUICK_START.md) 获取所有终端命令
+> **📖 Quick Command Guide:** See [QUICK_START.md](./QUICK_START.md) for all terminal commands
 
 ### 🛠️ Setup Instructions
 

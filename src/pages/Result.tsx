@@ -489,16 +489,16 @@ const Result = () => {
                   console.log('Details:', analysis.details);
                   return (
                     <div className="text-sm p-3 bg-yellow-50 border border-yellow-300 rounded">
-                      <p className="font-bold text-yellow-800 mb-2">⚠️ 调试信息：</p>
+                      <p className="font-bold text-yellow-800 mb-2">⚠️ Debug Info:</p>
                       <p className="text-xs text-yellow-700">
-                        - 有 details: {analysis.details ? '✓' : '✗'}<br/>
-                        - 有 baseline_results: {analysis.details?.baseline_results ? '✓' : '✗'}<br/>
-                        - 有 detectgpt: {analysis.details?.baseline_results?.text_detection?.detectgpt ? '✓' : '✗'}<br/>
-                        - 有 reasoning: {reasoning ? '✓' : '✗'}<br/>
-                        - Reasoning 长度: {reasoning?.length || 0}
+                        - Has details: {analysis.details ? '✓' : '✗'}<br/>
+                        - Has baseline_results: {analysis.details?.baseline_results ? '✓' : '✗'}<br/>
+                        - Has detectgpt: {analysis.details?.baseline_results?.text_detection?.detectgpt ? '✓' : '✗'}<br/>
+                        - Has reasoning: {reasoning ? '✓' : '✗'}<br/>
+                        - Reasoning length: {reasoning?.length || 0}
                       </p>
                       <p className="text-xs text-yellow-700 mt-2">
-                        💡 如果看到这个消息，请从 Detection 页面重新运行检测
+                        💡 If you see this message, please re-run detection from the Detection page
                       </p>
                     </div>
                   );

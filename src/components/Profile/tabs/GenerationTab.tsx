@@ -176,7 +176,7 @@ const GenerationTab = ({
           itemsPerPage={ITEMS_PER_PAGE}
           onPageChange={setCurrentPage}
           onClearFilter={handleClearFilter}
-          onRecordClick={handleRecordClick} // ✅ 点击事件
+          onRecordClick={handleRecordClick} // ✅ Click event
           renderText={(record) =>
             getRecordPreview(
               record.generated_text ||

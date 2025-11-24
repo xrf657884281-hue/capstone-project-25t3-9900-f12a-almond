@@ -114,7 +114,7 @@ class VisionService:
             cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
             # remove leading list numbers like "1.", "2)", "-", "*"
             cleaned = re.sub(r"(?m)^\s*(?:[-*•]\s+|\d+\s*[\.)]\s+)", "", cleaned)
-            # remove section titles like "主要场景描述："
+            # remove section titles
             cleaned = re.sub(r"(?m)^\s*[^：:\n]{1,20}[：:]\s*", "", cleaned)
             # collapse multiple spaces/newlines
             cleaned = re.sub(r"\s+", " ", cleaned).strip()
@@ -178,27 +178,27 @@ class VisionService:
         
         # Build prompt for image analysis
         if (output_mode or "detailed") == "concise":
-            # 新闻导语式、可直接用于生成/检测的简洁段落
+            # Concise news-style paragraph for generation/detection
             base_prompt = (
-                "请基于图片内容输出一段英文新闻导语，要求：\n"
-                "- 只输出一段连续文本，不要编号/小标题/项目符号；\n"
-                "- 不要猜测具体人物真实身份；如有可见地名/文字（如“Sydney”等）可自然融入；\n"
-                "- 聚焦可观测事实：地点/活动/装扮/氛围；\n"
-                f"- 字数不超过{max_chars or 120}字，语气自然客观。\n"
-                "如果图片无法判断某些信息，请省略而非虚构。"
+                "Based on the image content, output a concise English news lead paragraph. Requirements:\n"
+                "- Output only one continuous paragraph, no numbering, subtitles, or bullet points;\n"
+                "- Do not guess specific person identities; if visible place names/text (e.g., 'Sydney') are present, naturally incorporate them;\n"
+                "- Focus on observable facts: location/activity/appearance/atmosphere;\n"
+                f"- Maximum {max_chars or 120} characters, natural and objective tone.\n"
+                "If certain information cannot be determined from the image, omit it rather than fabricate."
             )
         else:
             base_prompt = (
-                "请基于图片内容输出一段英文新闻导语，要求：\n"
-                "- 只输出一段连续文本，不要编号/小标题/项目符号；\n"
-                "- 不要猜测具体人物真实身份；如有可见地名/文字（如“Sydney”等）可自然融入；\n"
-                "- 聚焦可观测事实：地点/活动/装扮/氛围；\n"
-                f"- 字数不超过{max_chars or 120}字，语气自然客观。\n"
-                "如果图片无法判断某些信息，请省略而非虚构。"
+                "Based on the image content, output a concise English news lead paragraph. Requirements:\n"
+                "- Output only one continuous paragraph, no numbering, subtitles, or bullet points;\n"
+                "- Do not guess specific person identities; if visible place names/text (e.g., 'Sydney') are present, naturally incorporate them;\n"
+                "- Focus on observable facts: location/activity/appearance/atmosphere;\n"
+                f"- Maximum {max_chars or 120} characters, natural and objective tone.\n"
+                "If certain information cannot be determined from the image, omit it rather than fabricate."
             )
         
         if additional_prompt:
-            base_prompt += f"\n\n额外要求：{additional_prompt}"
+            base_prompt += f"\n\nAdditional requirements: {additional_prompt}"
         
         try:
             logger.info("Calling GPT-4 Vision API for image analysis...")
@@ -288,18 +288,18 @@ class VisionService:
         
         # Try to extract key information using simple patterns
         # This is a basic implementation - can be enhanced
-        if "人物" in description or "人" in description:
+        if "people" in description_lower or "person" in description_lower or "man" in description_lower or "woman" in description_lower:
             structured["scene"] = "contains_people"
         
-        if "室内" in description_lower or "房间" in description or "建筑物" in description:
+        if "indoor" in description_lower or "room" in description_lower or "building" in description_lower or "inside" in description_lower:
             structured["location"] = "indoor"
-        elif "室外" in description_lower or "街道" in description or "户外" in description:
+        elif "outdoor" in description_lower or "street" in description_lower or "outside" in description_lower:
             structured["location"] = "outdoor"
         
         # Extract main action keywords
-        action_keywords = ["走", "站", "坐", "跑", "看", "说话", "笑", "吃", "喝"]
+        action_keywords = ["walking", "standing", "sitting", "running", "looking", "talking", "smiling", "eating", "drinking"]
         for keyword in action_keywords:
-            if keyword in description:
+            if keyword in description_lower:
                 structured["action"] = keyword
                 break
         

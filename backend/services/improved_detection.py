@@ -319,18 +319,18 @@ class DetectorFusion:
                                                                                   
                                                                            
             feature_weights = np.array([
-                0.08,                         
-                0.05,                           
-                0.50,                                          
-                0.02,                    
-                0.05,                 
-                0.05,                       
-                0.05,                        
-                0.10,                       
-                0.02,                       
-                0.03,                        
-                0.02,                      
-                0.03                   
+                0.05,                         # roberta_fake_score
+                0.04,                         # roberta_confidence
+                0.80,                         # detectgpt_sensitivity (dominant weight)
+                0.05,                         # detectgpt_is_generated
+                0.02,                         # gltr_high_prob_ratio
+                0.02,                         # gltr_avg_probability
+                0.02,                         # zero_shot_fake_score
+                0.02,                         # zero_shot_confidence
+                0.02,                         # clip_consistency
+                0.02,                         # clip_is_consistent
+                0.02,                         # emotional_positive
+                0.02                          # emotional_negative
             ])
             
                                            
