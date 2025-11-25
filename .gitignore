@@ -29,3 +29,4 @@ backend/**/__pycache__/
 backend/venv/
 venv/
 backend/logs/
+.env
