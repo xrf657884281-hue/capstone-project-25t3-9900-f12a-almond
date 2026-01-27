@@ -54,6 +54,9 @@ const SignIn: React.FC<Props> = ({ setIsLoggedIn }) => {
     setOauthLoading(provider);
     setError(null);
     try {
+      if (!auth || !googleProvider || !githubProvider) {
+        throw new Error("OAuth is not configured. Please use email/password login.");
+      }
       const prov = provider === "google" ? googleProvider : githubProvider;
       const res = await signInWithPopup(auth, prov);
 

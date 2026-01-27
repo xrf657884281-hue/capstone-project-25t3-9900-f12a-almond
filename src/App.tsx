@@ -12,7 +12,7 @@ import {
   ThemeToggle,
 } from "@/components/ui/resizable-navbar";
 import { NavRoutes, navItems } from "./constants";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import SignIn from "./pages/Sign-in";
 import SignUp from "./pages/Sign-up";
@@ -22,8 +22,27 @@ import { Toaster } from "./components/ui/sonner";
 
 const App = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    // Check localStorage on initial load
+    return !!localStorage.getItem("access_token");
+  });
   const navigate = useNavigate();
+
+  // Sync login state with localStorage changes
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem("access_token");
+      setIsLoggedIn(!!token);
+    };
+    
+    // Check on mount
+    checkAuth();
+    
+    // Listen for storage changes (e.g., from other tabs)
+    window.addEventListener("storage", checkAuth);
+    
+    return () => window.removeEventListener("storage", checkAuth);
+  }, []);
 
   const navItemsForNavbar = navItems.map((item) => ({
     name: item.label,
@@ -31,6 +50,8 @@ const App = () => {
   }));
 
   const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
     setIsLoggedIn(false);
     navigate("/");
   };
