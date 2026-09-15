@@ -3,10 +3,10 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import GUI from 'lil-gui'
 
-import earthVertexShader from '@/components/Earth/shaders/earth/vertex.glsl?raw'
-import earthFragmentShader from '@/components/Earth/shaders/earth/fragment.glsl?raw'
-import atmosphereVertexShader from '@/components/Earth/shaders/atmosphere/vertex.glsl?raw'
-import atmosphereFragmentShader from '@/components/Earth/shaders/atmosphere/fragment.glsl?raw'
+import earthVertexShader from '@/components/earth/shaders/earth/vertex.glsl?raw'
+import earthFragmentShader from '@/components/earth/shaders/earth/fragment.glsl?raw'
+import atmosphereVertexShader from '@/components/earth/shaders/atmosphere/vertex.glsl?raw'
+import atmosphereFragmentShader from '@/components/earth/shaders/atmosphere/fragment.glsl?raw'
 
 type EarthCanvasProps = {
   className?: string
